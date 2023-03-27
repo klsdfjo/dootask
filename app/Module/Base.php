@@ -1953,12 +1953,16 @@ class Base
      * @param null $default
      * @return mixed|null
      */
-    public static function getContentValue($key, $default = null)
+    public static function getContentValue($key = null, $default = null)
     {
         global $_A;
         if (!isset($_A["__static_input_content"])) {
             parse_str(Request::getContent(), $input);
             $_A["__static_input_content"] = $input;
+            unset($input);
+        }
+        if ($key === null) {
+            return $_A["__static_input_content"];
         }
         return $_A["__static_input_content"][$key] ?? $default;
     }
@@ -1968,7 +1972,7 @@ class Base
      * @param null $default
      * @return array|mixed|string|null
      */
-    public static function getPostValue($key, $default = null)
+    public static function getPostValue($key = null, $default = null)
     {
         $value = self::getContentValue($key, $default);
         if (!isset($value)) {

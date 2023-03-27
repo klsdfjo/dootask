@@ -1,6 +1,6 @@
 {
     "name": "DooTask",
-    "version": "0.25.42",
+    "version": "0.25.48",
     "description": "DooTask is task management system.",
     "scripts": {
         "start": "./cmd dev",
@@ -29,7 +29,7 @@
         "file-loader": "^6.2.0",
         "inquirer": "^8.2.0",
         "internal-ip": "^6.2.0",
-        "jquery": "^3.6.1",
+        "jquery": "^3.6.4",
         "jspdf": "^2.5.1",
         "le5le-store": "^1.0.7",
         "less": "^4.1.2",

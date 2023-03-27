@@ -19,7 +19,7 @@ export default {
                 url: "system/rsa/public",
                 encrypt: false,
             }).then(({data}) => {
-                state.apiPublicKey = data.public;
+                state.apiRsaPublicKey = data.public;
             })
 
             // 迁移缓存
@@ -100,7 +100,7 @@ export default {
      * 访问接口
      * @param state
      * @param dispatch
-     * @param params // {url,data,method,timeout,header,spinner,websocket, before,complete,success,error,after}
+     * @param params // {url,data,method,timeout,header,spinner,websocket, before,complete,success,error,after,encrypt}
      * @returns {Promise<unknown>}
      */
     call({state, dispatch}, params) {
@@ -116,34 +116,50 @@ export default {
         if ($A.isJson(params.header)) {
             params.header = Object.assign(header, params.header)
         } else {
-            params.header = header;
+            params.header = header
         }
-        params.url = $A.apiUrl(params.url);
-        params.data = $A.date2string(params.data);
+        if (params.encrypt === undefined && [
+            'users/login'
+        ].includes(params.url)) {
+            params.encrypt = true
+        }
+        params.url = $A.apiUrl(params.url)
+        params.data = $A.date2string(params.data)
         //
-        const cloneParams = $A.cloneJSON(params);
-        return new Promise(function (resolve, reject) {
+        const cloneParams = $A.cloneJSON(params)
+        return new Promise(async (resolve, reject) => {
+            // 加密传输
+            if (params.encrypt === true) {
+                params.header.encrypt = "rsa"
+                params.method = "post"  // 加密传输时强制使用post
+                params.data = await dispatch("rsaEncrypt", params.data)
+            }
+            // 数据转换
+            if (params.method === "post") {
+                params.data = JSON.stringify(params.data)
+            }
+            // Spinner
             if (params.spinner === true || (typeof params.spinner === "number" && params.spinner > 0)) {
-                const {before, complete} = params;
+                const {before, complete} = params
                 params.before = () => {
                     dispatch("showSpinner", typeof params.spinner === "number" ? params.spinner : 0)
                     typeof before === "function" && before()
-                };
+                }
                 //
                 params.complete = () => {
                     dispatch("hiddenSpinner")
                     typeof complete === "function" && complete()
-                };
-            }
-            //
-            params.success = (result, status, xhr) => {
-                state.ajaxNetworkException = false;
-                if (!$A.isJson(result)) {
-                    console.log(result, status, xhr);
-                    reject({ret: -1, data: {}, msg: "Return error"})
-                    return;
                 }
-                const {ret, data, msg} = result;
+            }
+            // 请求回调
+            params.success = (result, status, xhr) => {
+                state.ajaxNetworkException = false
+                if (!$A.isJson(result)) {
+                    console.log(result, status, xhr)
+                    reject({ret: -1, data: {}, msg: "Return error"})
+                    return
+                }
+                const {ret, data, msg} = result
                 if (ret === -1) {
                     state.userId = 0
                     if (params.skipAuthError !== true) {
@@ -153,109 +169,110 @@ export default {
                             onOk: () => {
                                 dispatch("logout")
                             }
-                        });
+                        })
                         reject(result)
-                        return;
+                        return
                     }
                 }
                 if (ret === -2 && params.checkNick !== false) {
                     // 需要昵称
                     dispatch("userEditInput", 'nickname').then(() => {
-                        dispatch("call", cloneParams).then(resolve).catch(reject);
+                        dispatch("call", cloneParams).then(resolve).catch(reject)
                     }).catch(err => {
                         reject({ret: -1, data, msg: err || $A.L('请设置昵称！')})
-                    });
-                    return;
+                    })
+                    return
                 }
                 if (ret === -3 && params.checkTel !== false) {
                     // 需要联系电话
                     dispatch("userEditInput", 'tel').then(() => {
-                        dispatch("call", cloneParams).then(resolve).catch(reject);
+                        dispatch("call", cloneParams).then(resolve).catch(reject)
                     }).catch(err => {
                         reject({ret: -1, data, msg: err || $A.L('请设置联系电话！')})
-                    });
-                    return;
+                    })
+                    return
                 }
                 if (ret === 1) {
-                    resolve({data, msg});
+                    resolve({data, msg})
                 } else {
                     reject({ret, data, msg: msg || "Unknown error"})
                     //
                     if (ret === -4001) {
-                        dispatch("forgetProject", data.project_id);
+                        dispatch("forgetProject", data.project_id)
                     } else if (ret === -4002) {
-                        dispatch("forgetTask", data.task_id);
+                        dispatch("forgetTask", data.task_id)
                     } else if (ret === -4003) {
-                        dispatch("forgetDialog", data.dialog_id);
+                        dispatch("forgetDialog", data.dialog_id)
                     }
                 }
-            };
+            }
             params.error = (xhr, status) => {
-                const networkException = window.navigator.onLine === false || (status === 0 && xhr.readyState === 4);
+                const networkException = window.navigator.onLine === false || (status === 0 && xhr.readyState === 4)
                 if (params.checkNetwork !== false) {
-                    state.ajaxNetworkException = networkException;
+                    state.ajaxNetworkException = networkException
                 }
                 if (networkException) {
                     reject({ret: -1001, data: {}, msg: "Network exception"})
                 } else {
                     reject({ret: -1, data: {}, msg: "System error"})
                 }
-            };
-            //
-            if (params.websocket === true || params.ws === true) {
-                const apiWebsocket = $A.randomString(16);
+            }
+            // WebSocket
+            if (params.websocket === true) {
+                const apiWebsocket = $A.randomString(16)
                 const apiTimeout = setTimeout(() => {
-                    const WListener = state.ajaxWsListener.find((item) => item.apiWebsocket == apiWebsocket);
+                    const WListener = state.ajaxWsListener.find((item) => item.apiWebsocket == apiWebsocket)
                     if (WListener) {
-                        WListener.complete();
-                        WListener.error("timeout");
-                        WListener.after();
+                        WListener.complete()
+                        WListener.error("timeout")
+                        WListener.after()
                     }
-                    state.ajaxWsListener = state.ajaxWsListener.filter((item) => item.apiWebsocket != apiWebsocket);
-                }, params.timeout || 30000);
+                    state.ajaxWsListener = state.ajaxWsListener.filter((item) => item.apiWebsocket != apiWebsocket)
+                }, params.timeout || 30000)
                 state.ajaxWsListener.push({
                     apiWebsocket: apiWebsocket,
                     complete: typeof params.complete === "function" ? params.complete : () => { },
                     success: typeof params.success === "function" ? params.success : () => { },
                     error: typeof params.error === "function" ? params.error : () => { },
                     after: typeof params.after === "function" ? params.after : () => { },
-                });
+                })
                 //
-                params.complete = () => { };
-                params.success = () => { };
-                params.error = () => { };
-                params.after = () => { };
-                params.header['Api-Websocket'] = apiWebsocket;
+                params.complete = () => { }
+                params.success = () => { }
+                params.error = () => { }
+                params.after = () => { }
+                params.header['Api-Websocket'] = apiWebsocket
                 //
                 if (state.ajaxWsReady === false) {
-                    state.ajaxWsReady = true;
+                    state.ajaxWsReady = true
                     dispatch("websocketMsgListener", {
                         name: "apiWebsocket",
                         callback: (msg) => {
                             switch (msg.type) {
                                 case 'apiWebsocket':
-                                    clearTimeout(apiTimeout);
-                                    const apiWebsocket = msg.apiWebsocket;
-                                    const apiSuccess = msg.apiSuccess;
-                                    const apiResult = msg.data;
-                                    const WListener = state.ajaxWsListener.find((item) => item.apiWebsocket == apiWebsocket);
+                                    clearTimeout(apiTimeout)
+                                    const apiWebsocket = msg.apiWebsocket
+                                    const apiSuccess = msg.apiSuccess
+                                    const apiResult = msg.data
+                                    const WListener = state.ajaxWsListener.find((item) => item.apiWebsocket == apiWebsocket)
                                     if (WListener) {
-                                        WListener.complete();
+                                        WListener.complete()
                                         if (apiSuccess) {
-                                            WListener.success(apiResult);
+                                            WListener.success(apiResult)
                                         } else {
-                                            WListener.error(apiResult);
+                                            WListener.error(apiResult)
                                         }
-                                        WListener.after();
+                                        WListener.after()
                                     }
-                                    state.ajaxWsListener = state.ajaxWsListener.filter((item) => item.apiWebsocket != apiWebsocket);
-                                    break;
+                                    state.ajaxWsListener = state.ajaxWsListener.filter((item) => item.apiWebsocket != apiWebsocket)
+                                    break
                             }
                         }
-                    });
+                    })
                 }
             }
-            $A.ajaxc(params);
+            //
+            $A.ajaxc(params)
         })
     },
 
@@ -3141,6 +3158,35 @@ export default {
             state.ws.close();
             state.ws = null;
         }
+    },
+
+    /** *****************************************************************************************/
+    /** ************************************** rsa **********************************************/
+    /** *****************************************************************************************/
+
+    /**
+     * rsa 加密
+     * @param state
+     * @param data
+     * @returns {Promise<unknown>}
+     */
+    rsaEncrypt({state}, data) {
+        return new Promise(resolve => {
+            if (typeof JSEncrypt === "undefined" || !state.apiRsaPublicKey) {
+                resolve(data)
+                return
+            }
+            const encrypt = new JSEncrypt()
+            encrypt.setPublicKey(state.apiRsaPublicKey)
+            if ($A.isJson(data)) {
+                for (let key in data) {
+                    data[key] = encrypt.encryptLong(data[key])
+                }
+            } else if (typeof data === "string") {
+                data = encrypt.encryptLong(data)
+            }
+            resolve(data)
+        })
     },
 
     /** *****************************************************************************************/

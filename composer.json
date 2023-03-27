@@ -13,6 +13,7 @@
         "ext-gd": "*",
         "ext-json": "*",
         "ext-libxml": "*",
+        "ext-openssl": "*",
         "ext-simplexml": "*",
         "directorytree/ldaprecord-laravel": "^2.7",
         "fideloper/proxy": "^4.4.1",

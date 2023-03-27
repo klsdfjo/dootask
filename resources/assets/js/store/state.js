@@ -172,5 +172,5 @@ export default {
     formLabelWidth: $A(window).width() > 576 ? 'auto' : '',
 
     // 接口公钥
-    apiPublicKey: null,
+    apiRsaPublicKey: null,
 };

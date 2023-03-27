@@ -5,8 +5,8 @@ namespace App\Http\Middleware;
 @error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 
 use App\Module\Doo;
+use App\Module\Rsa;
 use Closure;
-use Request;
 
 class WebApi
 {
@@ -22,16 +22,28 @@ class WebApi
         global $_A;
         $_A = [];
 
-        if (Request::input('__Access-Control-Allow-Origin') || Request::header('__Access-Control-Allow-Origin')) {
-            header('Access-Control-Allow-Origin:*');
-            header('Access-Control-Allow-Methods:GET,POST,PUT,DELETE,OPTIONS');
-            header('Access-Control-Allow-Headers:Content-Type, platform, platform-channel, token, release, Access-Control-Allow-Origin');
+        if ($request->isMethod('post')) {
+            $version = $request->header('version');
+            if ($version && version_compare($version, '0.25.48', '<')) {
+                parse_str($request->getContent(), $content);
+                if ($content) {
+                    $request->merge($content);
+                }
+                unset($content);
+            } elseif ($request->header('encrypt') === "rsa") {
+                $content = Rsa::decryptData($request->post());
+                if ($content) {
+                    $request->merge($content);
+                }
+                unset($content);
+            }
         }
 
         $APP_SCHEME = env('APP_SCHEME', 'auto');
         if (in_array(strtolower($APP_SCHEME), ['https', 'on', 'ssl', '1', 'true', 'yes'], true)) {
             $request->setTrustedProxies([$request->getClientIp()], $request::HEADER_X_FORWARDED_PROTO);
         }
+
         Doo::load();
 
         return $next($request);
