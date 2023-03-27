@@ -34,7 +34,7 @@ use Request;
 class UsersController extends AbstractController
 {
     /**
-     * @api {get|post} api/users/login          01. 登录、注册
+     * @api {get} api/users/login          01. 登录、注册
      *
      * @apiDescription 需要token身份
      * @apiVersion 1.0.0
@@ -1527,7 +1527,7 @@ class UsersController extends AbstractController
             return Base::retError('未开放修改权限，请联系管理员');
         }
         //
-        $list = Base::getPostValue('list');
+        $list = Request::input('list');
         $array = [];
         if (empty($list) || !is_array($list)) {
             return Base::retError('参数错误');

@@ -1934,64 +1934,6 @@ class Base
     }
 
     /**
-     * php://input 字符串解析到变量并获取指定值
-     * @param $key
-     * @return array
-     */
-    public static function getContentsParse($key)
-    {
-        parse_str(Request::getContent(), $input);
-        if ($key) {
-            $input = $input[$key] ?? array();
-        }
-        return is_array($input) ? $input : array($input);
-    }
-
-    /**
-     * php://input 字符串解析到变量并获取指定值
-     * @param $key
-     * @param null $default
-     * @return mixed|null
-     */
-    public static function getContentValue($key = null, $default = null)
-    {
-        global $_A;
-        if (!isset($_A["__static_input_content"])) {
-            parse_str(Request::getContent(), $input);
-            $_A["__static_input_content"] = $input;
-            unset($input);
-        }
-        if ($key === null) {
-            return $_A["__static_input_content"];
-        }
-        return $_A["__static_input_content"][$key] ?? $default;
-    }
-
-    /**
-     * @param $key
-     * @param null $default
-     * @return array|mixed|string|null
-     */
-    public static function getPostValue($key = null, $default = null)
-    {
-        $value = self::getContentValue($key, $default);
-        if (!isset($value)) {
-            $value = Request::post($key, $default);
-        }
-        return $value;
-    }
-
-    /**
-     * @param $key
-     * @param null $default
-     * @return int
-     */
-    public static function getPostInt($key, $default = null)
-    {
-        return intval(self::getPostValue($key, $default));
-    }
-
-    /**
      * 多维 array_values
      * @param $array
      * @param string $keyName

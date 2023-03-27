@@ -1989,8 +1989,8 @@ class ProjectController extends AbstractController
     {
         User::auth();
         //
-        $project_id = intval(Base::getContentValue('project_id'));
-        $flows = Base::getContentValue('flows');
+        $project_id = intval(Request::input('project_id'));
+        $flows = Request::input('flows');
         //
         if (!is_array($flows)) {
             return Base::retError('参数错误');
