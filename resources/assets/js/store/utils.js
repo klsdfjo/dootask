@@ -1,3 +1,5 @@
+import Dexie from "dexie";
+
 /**
  * @param key
  * @param requestData
@@ -73,3 +75,8 @@ function __callData(key, requestData, state) {
 export function $callData(key, requestData, state) {
     return new __callData(key, requestData, state)
 }
+
+export const $db = new Dexie("DooDB");
+$db.version(1).stores({
+    openpgp: "++id, name, content"
+});

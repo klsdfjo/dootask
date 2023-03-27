@@ -1,6 +1,7 @@
 import {Store} from 'le5le-store';
+import * as openpgp from 'openpgp';
 import {languageType} from "../language";
-import {$callData} from './utils'
+import {$callData, $db} from './utils'
 
 export default {
     /**
@@ -3132,5 +3133,90 @@ export default {
             state.ws.close();
             state.ws = null;
         }
+    },
+
+    /** *****************************************************************************************/
+    /** ************************************ openpgp ********************************************/
+    /** *****************************************************************************************/
+
+    /**
+     * 获取密钥对（不存在自动创建）
+     * @param state
+     * @returns {Promise<unknown>}
+     */
+    openpgpKey({state}) {
+        return new Promise(async resolve => {
+            const one = await $db.openpgp.where({"name": "key"}).first()
+            let data = $A.jsonParse(one ? one.content: {})
+            if (data.publicKey && data.privateKey) {
+                resolve(data)
+                return
+            }
+            await $db.openpgp.where({"name": "key"}).delete()
+            //
+            data = await openpgp.generateKey({
+                type: 'ecc',
+                curve: 'p256',
+                passphrase: `#${state.userId}`,
+                userIDs: [{userid: state.userId}],
+            })
+            await $db.openpgp.add({name: "key", content: $A.jsonStringify(data)})
+            resolve(data)
+        })
+    },
+
+    /**
+     * 加密
+     * @param state
+     * @param dispatch
+     * @param data
+     * @returns {Promise<unknown>}
+     */
+    openpgpEncrypt({state, dispatch}, data) {
+        return new Promise(async resolve => {
+            if (!$A.isJson(data)) {
+                data = {message: data}
+            }
+            let message = data.message
+            let publicKeyArmored = data.publicKey || data.key || (await dispatch("openpgpKey")).publicKey
+            if ($A.isJson(message)) {
+                publicKeyArmored = message.publicKey || message.key
+                message = message.message
+            } else {
+                publicKeyArmored = (await dispatch("openpgpKey")).publicKey
+            }
+            //
+            const publicKey = await openpgp.readKey({armoredKey: publicKeyArmored})
+            const encrypted = await openpgp.encrypt({
+                message: await openpgp.createMessage({text: $A.jsonStringify({message})}),
+                encryptionKeys: publicKey,
+            })
+            resolve(encrypted)
+        })
+    },
+
+    /**
+     * 解密
+     * @param state
+     * @param dispatch
+     * @param encrypted
+     * @returns {Promise<unknown>}
+     */
+    openpgpDecrypt({state, dispatch}, encrypted) {
+        return new Promise(async resolve => {
+            const {privateKey: privateKeyArmored} = await dispatch("openpgpKey")
+            const privateKey = await openpgp.decryptKey({
+                privateKey: await openpgp.readPrivateKey({armoredKey: privateKeyArmored}),
+                passphrase: `#${state.userId}`
+            })
+            //
+            const message = await openpgp.readMessage({armoredMessage: encrypted})
+            const {data} = await openpgp.decrypt({
+                message,
+                decryptionKeys: privateKey
+            })
+            const decrypted = $A.jsonParse(data)
+            resolve(decrypted.message)
+        })
     }
 }
