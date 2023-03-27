@@ -118,9 +118,15 @@ export default {
         } else {
             params.header = header
         }
-        if (params.encrypt === undefined && [
-            'users/login'
-        ].includes(params.url)) {
+        if (params.encrypt === undefined && $A.inArray(params.url, [
+            'users/*',
+            'project/*',
+            'system/*',
+            'dialog/*',
+            'file/*',
+            'report/*',
+            'public/*',
+        ], true)) {
             params.encrypt = true
         }
         params.url = $A.apiUrl(params.url)
@@ -129,10 +135,10 @@ export default {
         const cloneParams = $A.cloneJSON(params)
         return new Promise(async (resolve, reject) => {
             // 加密传输
-            if (params.encrypt === true) {
+            if (params.encrypt === true && params.data) {
                 params.header.encrypt = "rsa"
                 params.method = "post"  // 加密传输时强制使用post
-                params.data = await dispatch("rsaEncrypt", params.data)
+                params.data = {encrypt: await dispatch("rsaEncrypt", encodeURI(JSON.stringify(params.data)))}
             }
             // 数据转换
             if (params.method === "post") {

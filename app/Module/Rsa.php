@@ -46,6 +46,7 @@ class Rsa
             $decrypted = [];
             $dataArray = str_split(base64_decode($data), 128);
             foreach ($dataArray as $subData) {
+                $subDecrypted = '';
                 openssl_private_decrypt($subData, $subDecrypted, $this->privateKey);
                 $decrypted[] = $subDecrypted;
             }

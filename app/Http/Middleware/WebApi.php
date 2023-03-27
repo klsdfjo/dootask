@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 @error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 
+use App\Module\Base;
 use App\Module\Doo;
 use App\Module\Rsa;
 use Closure;
@@ -25,17 +26,19 @@ class WebApi
         if ($request->isMethod('post')) {
             $version = $request->header('version');
             if ($version && version_compare($version, '0.25.48', '<')) {
+                // Older versions are compatible php://input
                 parse_str($request->getContent(), $content);
                 if ($content) {
                     $request->merge($content);
                 }
                 unset($content);
             } elseif ($request->header('encrypt') === "rsa") {
-                $content = Rsa::decryptData($request->post());
-                if ($content) {
-                    $request->merge($content);
+                // New version decrypts submitted content
+                $encrypt = Rsa::decryptData($request->input('encrypt'));
+                if ($encrypt) {
+                    $request->merge(Base::json2array(urldecode($encrypt)));
                 }
-                unset($content);
+                unset($encrypt);
             }
         }
 
