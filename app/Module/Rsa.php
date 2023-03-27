@@ -43,26 +43,25 @@ class Rsa
                 $data[$k] = $this->decrypt($v);
             }
         } elseif (is_string($data)) {
-            $decrypted = [];
-            $dataArray = str_split(base64_decode($data), 128);
-            foreach ($dataArray as $subData) {
-                $subDecrypted = '';
-                openssl_private_decrypt($subData, $subDecrypted, $this->privateKey);
-                $decrypted[] = $subDecrypted;
-            }
-            $data = implode('', $decrypted);
+            $subDecrypted = "";
+            openssl_private_decrypt(base64_decode($data), $subDecrypted, $this->privateKey);
+            return $subDecrypted;
         }
         return $data;
     }
 
     /**
-     * 解密
+     * 解密接口数据
      * @param $value
      * @return array|false|mixed|string
      */
-    public static function decryptData($value)
+    public static function decryptApiData($value)
     {
-        $rsa = new Rsa();
-        return $rsa->decrypt($value);
+        $rsa = new self();
+        $data = $rsa->decrypt($value);
+        if (is_array($data)) {
+            $data = implode($data);
+        }
+        return Base::json2array(urldecode($data));
     }
 }

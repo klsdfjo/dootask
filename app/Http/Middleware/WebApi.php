@@ -4,7 +4,6 @@ namespace App\Http\Middleware;
 
 @error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 
-use App\Module\Base;
 use App\Module\Doo;
 use App\Module\Rsa;
 use Closure;
@@ -32,11 +31,11 @@ class WebApi
                     $request->merge($content);
                 }
                 unset($content);
-            } elseif ($request->header('encrypt') === "rsa") {
+            } elseif ($request->header('encrypt') === "rsa1.0") {
                 // New version decrypts submitted content
-                $encrypt = Rsa::decryptData($request->input('encrypt'));
+                $encrypt = Rsa::decryptApiData($request->input('encrypt'));
                 if ($encrypt) {
-                    $request->merge(Base::json2array(urldecode($encrypt)));
+                    $request->merge($encrypt);
                 }
                 unset($encrypt);
             }

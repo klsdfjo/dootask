@@ -136,9 +136,9 @@ export default {
         return new Promise(async (resolve, reject) => {
             // 加密传输
             if (params.encrypt === true && params.data) {
-                params.header.encrypt = "rsa"
+                params.header.encrypt = "rsa1.0"
                 params.method = "post"  // 加密传输时强制使用post
-                params.data = {encrypt: await dispatch("rsaEncrypt", encodeURI(JSON.stringify(params.data)))}
+                params.data = {encrypt: await dispatch("dataEncrypt", params.data)}
             }
             // 数据转换
             if (params.method === "post") {
@@ -279,6 +279,28 @@ export default {
             }
             //
             $A.ajaxc(params)
+        })
+    },
+
+    /**
+     * call data 加密
+     * @param state
+     * @param data
+     * @returns {Promise<unknown>}
+     */
+    dataEncrypt({state}, data) {
+        return new Promise(resolve => {
+            if (typeof JSEncrypt === "undefined" || !state.apiRsaPublicKey) {
+                resolve(data)
+                return
+            }
+            if (state.__dataEncrypt === undefined) {
+                state.__dataEncrypt = new JSEncrypt()
+                state.__dataEncrypt.setPublicKey(state.apiRsaPublicKey)
+            }
+            const text = encodeURI(JSON.stringify(data))
+            const arr = text.match(/.{1,117}/g)
+            resolve(arr.map(entry => state.__dataEncrypt.encrypt(entry)))
         })
     },
 
@@ -3164,35 +3186,6 @@ export default {
             state.ws.close();
             state.ws = null;
         }
-    },
-
-    /** *****************************************************************************************/
-    /** ************************************** rsa **********************************************/
-    /** *****************************************************************************************/
-
-    /**
-     * rsa 加密
-     * @param state
-     * @param data
-     * @returns {Promise<unknown>}
-     */
-    rsaEncrypt({state}, data) {
-        return new Promise(resolve => {
-            if (typeof JSEncrypt === "undefined" || !state.apiRsaPublicKey) {
-                resolve(data)
-                return
-            }
-            const encrypt = new JSEncrypt()
-            encrypt.setPublicKey(state.apiRsaPublicKey)
-            if ($A.isJson(data)) {
-                for (let key in data) {
-                    data[key] = encrypt.encryptLong(data[key])
-                }
-            } else if (typeof data === "string") {
-                data = encrypt.encryptLong(data)
-            }
-            resolve(data)
-        })
     },
 
     /** *****************************************************************************************/
