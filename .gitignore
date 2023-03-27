@@ -6,6 +6,7 @@
 /public/.user.ini
 /storage/*.key
 /config/LICENSE
+/config/RSA_*
 /vendor
 /build
 /tmp

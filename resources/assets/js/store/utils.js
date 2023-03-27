@@ -78,5 +78,5 @@ export function $callData(key, requestData, state) {
 
 export const $db = new Dexie("DooDB");
 $db.version(1).stores({
-    openpgp: "++id, name, content"
+    pgp: "++id, name, content",
 });

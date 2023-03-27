@@ -170,4 +170,7 @@ export default {
     // 表单布局
     formLabelPosition: $A(window).width() > 576 ? 'right' : 'top',
     formLabelWidth: $A(window).width() > 576 ? 'auto' : '',
+
+    // 接口公钥
+    apiPublicKey: null,
 };

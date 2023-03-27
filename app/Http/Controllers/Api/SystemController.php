@@ -10,6 +10,7 @@ use App\Module\BillExport;
 use App\Module\BillMultipleExport;
 use App\Module\Doo;
 use App\Module\Extranet;
+use App\Module\Rsa\Rsa;
 use Arr;
 use Carbon\Carbon;
 use Guanguans\Notify\Factory;
@@ -1162,5 +1163,25 @@ class SystemController extends AbstractController
             }
         }
         return $array;
+    }
+
+    /**
+     * @api {get} api/system/rsa/public          24. 获取RSA公钥
+     *
+     * @apiVersion 1.0.0
+     * @apiGroup system
+     * @apiName rsa__public
+     *
+     * @apiSuccess {Number} ret     返回状态码（1正确、0错误）
+     * @apiSuccess {String} msg     返回信息（错误描述）
+     * @apiSuccess {Object} data    返回数据
+     */
+    public function rsa__public()
+    {
+        $rsa = new Rsa();
+        $public = $rsa->getPublicKey();
+        return Base::retSuccess("success", [
+            'public' => $public,
+        ]);
     }
 }

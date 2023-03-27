@@ -390,24 +390,6 @@ export default {
         this.dialogMsgSubscribe = Store.subscribe('dialogMsgPush', this.addDialogMsg);
         //
         document.addEventListener('keydown', this.shortcutEvent);
-        //
-        this.$store.dispatch("openpgpKey").then(res => {
-            console.log("openpgpKey", res);
-        })
-        this.$store.dispatch("openpgpEncrypt", {message:{aaa:[1,2,3]}}).then(res => {
-            console.log("openpgpEncrypt", res);
-        })
-        this.$store.dispatch("openpgpDecrypt", `-----BEGIN PGP MESSAGE-----
-
-wX4Det7q7Mg+xJMSAgMENVKNV29uLzDeYV27iD8+O6JPVCwaSsBShqUtaUcT
-uZh5unsbDMsRFxk7V3e0dmDjJfIieU2K/u5Ae1nULmWkMjBDsS7EKL/35qAP
-8bzRyLCNTRu+tgAL2BshVg1U8Y0Q2qXeMDlaD5upfvZUR6vAwoHSTAF5Hplb
-opIjAeNnuAYPI+qgctv5vque6YW6nc9jtjOAcVDpgaljhktByTPfAnVxfdZ+
-RMOZA10ehttsJ/+ZXQckyZtIEdUoEybW3Yk=
-=i5eu
------END PGP MESSAGE-----`).then(res => {
-            console.log("openpgpDecrypt", res);
-        })
     },
 
     activated() {
