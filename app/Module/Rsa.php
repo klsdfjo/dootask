@@ -4,11 +4,38 @@ namespace App\Module;
 
 class Rsa
 {
-    private static $rsa;
-    private string $privateKey;
-    private string $publicKey;
+    /**
+     * 解析字符串
+     * @param $string
+     * @return array
+     */
+    public static function parseStr($string)
+    {
+        $array = [
+            'encrypt_version' => '',
+            'client_public_key' => '',
+        ];
+        $string = str_replace(";", "&", $string);
+        parse_str($string, $params);
+        foreach ($params as $key => $value) {
+            $key = strtolower(trim($key));
+            if ($key) {
+                $array[$key] = trim($value);
+            }
+        }
+        if ($array['client_public_key']) {
+            $array['client_public_key'] = chunk_split(url_safe($array['client_public_key'], false), 64);
+            $array['client_public_key'] = "-----BEGIN PUBLIC KEY-----\n" . $array['client_public_key'] . "-----END PUBLIC KEY-----";
+        }
+        return $array;
+    }
 
-    public function __construct($keySize = 1024)
+    /**
+     * 生成密钥
+     * @param $keySize
+     * @return void
+     */
+    public static function load($keySize = 1024)
     {
         $priPath = config_path("RSA_PRIVATE");
         $pubPath = config_path("RSA_PUBLIC");
@@ -22,54 +49,96 @@ class Rsa
             file_put_contents($priPath, $privateKey);
             file_put_contents($pubPath, $publicKey);
         }
-        $this->privateKey = file_get_contents($priPath);
-        $this->publicKey = file_get_contents($pubPath);
-        return $this;
     }
 
-    public function getPublicKey(): string
+    /**
+     * 获取公钥
+     * @return false|string
+     */
+    public static function getPublicKey()
     {
-        return $this->publicKey;
+        return file_get_contents(config_path("RSA_PUBLIC"));
     }
 
-    public function decrypt($data)
+    /**
+     * 获取私钥
+     * @return false|string
+     */
+    public static function getPrivateKey()
     {
+        return file_get_contents(config_path("RSA_PRIVATE"));
+    }
+
+    /**
+     * 加密
+     * @param $data
+     * @param $publicKey
+     * @return mixed|string
+     */
+    public static function encrypt($data, $publicKey = null)
+    {
+        if ($publicKey === null) {
+            $publicKey = self::getPublicKey();
+        }
         if (is_array($data)) {
             foreach ($data as $k => $v) {
-                $data[$k] = $this->decrypt($v);
+                $data[$k] = self::encrypt($v, $publicKey);
+            }
+        } elseif ($data) {
+            $subEncrypted = "";
+            openssl_public_encrypt($data, $subEncrypted, $publicKey);
+            return url_safe(base64_encode($subEncrypted));
+        }
+        return $data;
+    }
+
+    /**
+     * 解密
+     * @param $data
+     * @param $privateKey
+     * @return mixed|string
+     */
+    public static function decrypt($data, $privateKey = null)
+    {
+        if ($privateKey === null) {
+            $privateKey = self::getPrivateKey();
+        }
+        if (is_array($data)) {
+            foreach ($data as $k => $v) {
+                $data[$k] = self::decrypt($v, $privateKey);
             }
         } elseif (is_string($data)) {
             $subDecrypted = "";
-            openssl_private_decrypt(base64_decode($data), $subDecrypted, $this->privateKey);
+            openssl_private_decrypt(base64_decode(url_safe($data, false)), $subDecrypted, $privateKey);
             return $subDecrypted;
         }
         return $data;
     }
 
-    public static function load()
+    /**
+     * 加密接口数据
+     * @param $value
+     * @param null $publicKey
+     * @return string
+     */
+    public static function encryptApiData($value, $publicKey = null)
     {
-        self::$rsa = new self();
-    }
-
-    public static function rsa()
-    {
-        if (self::$rsa == null) {
-            self::load();
-        }
-        return self::$rsa;
+        $data = base64_encode(Base::array2json($value));
+        return self::encrypt(str_split($data, 117), $publicKey);
     }
 
     /**
      * 解密接口数据
      * @param $value
+     * @param null $privateKey
      * @return array|false|mixed|string
      */
-    public static function decryptApiData($value)
+    public static function decryptApiData($value, $privateKey = null)
     {
-        $data = self::rsa()->decrypt($value);
+        $data = self::decrypt($value, $privateKey);
         if (is_array($data)) {
             $data = implode($data);
         }
-        return Base::json2array(urldecode($data));
+        return Base::json2array(base64_decode($data));
     }
 }

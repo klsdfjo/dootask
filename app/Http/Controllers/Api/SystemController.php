@@ -1167,6 +1167,7 @@ class SystemController extends AbstractController
     /**
      * @api {get} api/system/rsa/public          25. 获取RSA公钥
      *
+     * @apiDescription 获取服务器公钥
      * @apiVersion 1.0.0
      * @apiGroup system
      * @apiName rsa__public
@@ -1177,9 +1178,8 @@ class SystemController extends AbstractController
      */
     public function rsa__public()
     {
-        $rsa = new Rsa();
         return Base::retSuccess("success", [
-            'public' => $rsa->getPublicKey(),
+            'public' => Rsa::getPublicKey(),
         ]);
     }
 }

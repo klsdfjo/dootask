@@ -25,30 +25,41 @@ class WebApi
         Rsa::load();
         Doo::load();
 
+        $encrypt = Rsa::parseStr($request->header('encrypt'));
         if ($request->isMethod('post')) {
             $version = $request->header('version');
             if ($version && version_compare($version, '0.25.48', '<')) {
-                // Older versions are compatible php://input
+                // 旧版本兼容 php://input
                 parse_str($request->getContent(), $content);
                 if ($content) {
                     $request->merge($content);
                 }
                 unset($content);
-            } elseif ($request->header('encrypt') === "rsa1.0") {
-                // New version decrypts submitted content
-                $encrypt = Rsa::decryptApiData($request->input('encrypt'));
-                if ($encrypt) {
-                    $request->merge($encrypt);
+            } elseif ($encrypt['encrypt_version'] === "rsa1.0") {
+                // 新版本解密提交的内容
+                $content = Rsa::decryptApiData($request->input('encrypted'));
+                if ($content) {
+                    $request->merge($content);
                 }
-                unset($encrypt);
+                unset($content);
             }
         }
 
+        // 强制 https
         $APP_SCHEME = env('APP_SCHEME', 'auto');
         if (in_array(strtolower($APP_SCHEME), ['https', 'on', 'ssl', '1', 'true', 'yes'], true)) {
             $request->setTrustedProxies([$request->getClientIp()], $request::HEADER_X_FORWARDED_PROTO);
         }
 
-        return $next($request);
+        $response = $next($request);
+
+        // 加密返回内容
+        if ($encrypt['client_public_key'] && !empty($response->getContent())) {
+            $response->setContent(json_encode([
+                'encrypted' => Rsa::encryptApiData($response->getContent(), $encrypt['client_public_key'])
+            ]));
+        }
+
+        return $response;
     }
 }

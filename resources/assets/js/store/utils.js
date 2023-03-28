@@ -1,5 +1,3 @@
-import Dexie from "dexie";
-
 /**
  * @param key
  * @param requestData
@@ -76,7 +74,13 @@ export function $callData(key, requestData, state) {
     return new __callData(key, requestData, state)
 }
 
-export const $db = new Dexie("DooDB");
-$db.version(1).stores({
-    pgp: "++id, name, content",
-});
+export function $urlSafe(value, encode = true) {
+    if (value) {
+        if (encode) {
+            value = String(value).replace(/\+/g, "-").replace(/\//g, "_")
+        } else {
+            value = String(value).replace(/-/g, "+").replace(/_/g, "/")
+        }
+    }
+    return value
+}

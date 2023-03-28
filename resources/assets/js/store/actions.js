@@ -1,7 +1,7 @@
 import {Store} from 'le5le-store';
-import * as openpgp from 'openpgp/lightweight';
+import {Base64} from "js-base64";
 import {languageType} from "../language";
-import {$callData, $db} from './utils'
+import {$callData, $urlSafe} from './utils'
 
 export default {
     /**
@@ -78,14 +78,12 @@ export default {
             }
             state.themeIsDark = $A.dark.isDarkEnabled()
 
-            // 服务器公钥、个人秘钥
+            // 服务器公钥
             dispatch("call", {
                 url: "system/rsa/public",
                 encrypt: false,
             }).then(({data}) => {
-                state.apiRsaPublicKey = data.public;
-            }).finally(_ => {
-                dispatch("openpgpGetKey")
+                state.rsaApiPublicKey = data.public;
             })
 
             // 加载语言包
@@ -121,11 +119,9 @@ export default {
             params.header = header
         }
         if (params.encrypt === undefined && $A.inArray(params.url, [
-            'users/login',
-            'users/editpass',
-            'users/operation',
-            'users/delete/account',
-            'dialog/msg/send*',
+            'dialog/*',
+            'system/*',
+            'users/*',
         ], true)) {
             params.encrypt = true
         }
@@ -135,11 +131,16 @@ export default {
         const cloneParams = $A.cloneJSON(params)
         return new Promise(async (resolve, reject) => {
             // 加密传输
-            if (params.encrypt === true && params.data) {
-                params.header.encrypt = "rsa1.0"
-                params.method = "post"  // 加密传输时强制使用post
-                params.data = {encrypt: await dispatch("dataEncrypt", params.data)}
+            const encrypt = []
+            if (params.encrypt === true) {
+                if (params.data && state.rsaApiPublicKey) {
+                    encrypt.push("encrypt_version=rsa1.0")
+                    params.method = "post"  // 加密传输时强制使用post
+                    params.data = {encrypted: await dispatch("rsaEncrypt", {message: params.data, publicKey: state.rsaApiPublicKey})}
+                }
+                encrypt.push("client_public_key=" + $urlSafe((await dispatch("rsaGetLocalKey")).publicKeyB64))
             }
+            params.header.encrypt = encrypt.join(";")
             // 数据转换
             if (params.method === "post") {
                 params.data = JSON.stringify(params.data)
@@ -158,12 +159,15 @@ export default {
                 }
             }
             // 请求回调
-            params.success = (result, status, xhr) => {
+            params.success = async (result, status, xhr) => {
                 state.ajaxNetworkException = false
                 if (!$A.isJson(result)) {
                     console.log(result, status, xhr)
                     reject({ret: -1, data: {}, msg: "Return error"})
                     return
+                }
+                if (params.encrypt === true && result.encrypted) {
+                    result = await dispatch("rsaDecrypt", {encrypted: result.encrypted})
                 }
                 const {ret, data, msg} = result
                 if (ret === -1) {
@@ -279,28 +283,6 @@ export default {
             }
             //
             $A.ajaxc(params)
-        })
-    },
-
-    /**
-     * call data 加密
-     * @param state
-     * @param data
-     * @returns {Promise<unknown>}
-     */
-    dataEncrypt({state}, data) {
-        return new Promise(resolve => {
-            if (typeof JSEncrypt === "undefined" || !state.apiRsaPublicKey) {
-                resolve(data)
-                return
-            }
-            if (state.__dataEncrypt === undefined) {
-                state.__dataEncrypt = new JSEncrypt()
-                state.__dataEncrypt.setPublicKey(state.apiRsaPublicKey)
-            }
-            const text = encodeURI(JSON.stringify(data))
-            const arr = text.match(/.{1,117}/g)
-            resolve(arr.map(entry => state.__dataEncrypt.encrypt(entry)))
         })
     },
 
@@ -3189,7 +3171,7 @@ export default {
     },
 
     /** *****************************************************************************************/
-    /** ************************************ openpgp ********************************************/
+    /** ***************************************** rsa *******************************************/
     /** *****************************************************************************************/
 
     /**
@@ -3197,12 +3179,15 @@ export default {
      * @param state
      * @returns {Promise<unknown>}
      */
-    openpgpGenerate({state}) {
-        return openpgp.generateKey({
-            type: 'ecc',
-            curve: 'p256',
-            passphrase: `#${state.userId}`,
-            userIDs: [{userid: state.userId}],
+    rsaGenerate({state}) {
+        return new Promise(resolve => {
+            const crypt = new JSEncrypt({default_key_size: 1024})
+            resolve({
+                privateKey: crypt.getPrivateKey(),
+                publicKey: crypt.getPublicKey(),
+                privateKeyB64: crypt.getPrivateKeyB64(),
+                publicKeyB64: crypt.getPublicKeyB64(),
+            })
         })
     },
 
@@ -3212,54 +3197,24 @@ export default {
      * @param dispatch
      * @returns {Promise<unknown>}
      */
-    openpgpGetKey({state, dispatch}) {
-        return new Promise(async (resolve, reject) => {
-            if (state.userId === 0) {
-                reject()
-                return
+    rsaGetLocalKey({state, dispatch}) {
+        return new Promise(async resolve => {
+            // 已存在
+            if (state.rsaLocalKeyPair.privateKey) {
+                return resolve(state.rsaLocalKeyPair)
             }
-            //
-            if ($A.isJson(state.openpgpData)) {
-                resolve(state.openpgpData)
-                return
+            // 避免多次生成
+            while (state.rsaLocalLock === true) {
+                await new Promise(r => setTimeout(r, 50));
             }
-            //
-            while (state.openpgpLock === true) {
-                await new Promise(r => setTimeout(r, 100));
+            if (state.rsaLocalKeyPair.privateKey) {
+                return resolve(state.rsaLocalKeyPair)
             }
-            state.openpgpLock = true
-            //
-            const one = await $db.pgp.where({name: `#${state.userId}`}).first()
-            const data = $A.jsonParse(one ? one.content: {})
-            if (data.publicKey && data.privateKey) {
-                resolve(state.openpgpData = data)
-                state.openpgpLock = false
-                return
-            }
-            //
-            const pair = await dispatch("openpgpGenerate")
-            dispatch("call", {
-                url: "users/pgp/status",
-                data: {
-                    public_key: pair.publicKey
-                }
-            }).then(async ({data}) => {
-                // 未创建过密钥对已保存新的密钥对
-                pair.id = data.id
-                await $db.pgp.where({name: `#${state.userId}`}).delete()
-                await $db.pgp.add({name: `#${state.userId}`, content: $A.jsonStringify(pair)})
-                resolve(state.openpgpData = pair)
-                state.openpgpStatus = "success"
-            }).catch(({ret, msg}) => {
-                reject(msg)
-                if (ret === -7001) {
-                    state.openpgpStatus = "wait"  // 已经创建过密钥对需要通过其他设备传过来
-                } else {
-                    state.openpgpStatus = "error"
-                }
-            }).finally(_ => {
-                state.openpgpLock = false
-            })
+            // 生成密钥对
+            state.rsaLocalLock = true
+            state.rsaLocalKeyPair = await dispatch("rsaGenerate")
+            state.rsaLocalLock = false
+            resolve(state.rsaLocalKeyPair)
         })
     },
 
@@ -3270,25 +3225,20 @@ export default {
      * @param data {message:any, ?publicKey:string}
      * @returns {Promise<unknown>}
      */
-    openpgpEncrypt({state, dispatch}, data) {
-        return new Promise(async (resolve, reject) => {
-            if (state.openpgpStatus !== "success") {
-                reject()
-                return
-            }
-            //
+    rsaEncrypt({state, dispatch}, data) {
+        return new Promise(async resolve => {
             if (!$A.isJson(data)) {
                 data = {message: data}
             }
             const message = data.message || data.text
-            const publicKeyArmored = data.publicKey || data.key || state.openpgpData.publicKey
-            const publicKey = await openpgp.readKey({armoredKey: publicKeyArmored})
+            const publicKey = data.publicKey || data.key || (await dispatch("rsaGetLocalKey")).publicKey
             //
-            const encrypted = await openpgp.encrypt({
-                message: await openpgp.createMessage({text: $A.jsonStringify({message})}),
-                encryptionKeys: publicKey,
-            })
-            resolve(encrypted)
+            const crypt = new JSEncrypt()
+            crypt.setPublicKey(publicKey)
+            //
+            const text = Base64.encode($A.jsonStringify(message))
+            const arr = text.match(/.{1,117}/g)
+            resolve(arr.map(entry => $urlSafe(crypt.encrypt(entry), true)))
         })
     },
 
@@ -3299,28 +3249,25 @@ export default {
      * @param data {encrypted:any, ?privateKey:string}
      * @returns {Promise<unknown>}
      */
-    openpgpDecrypt({state, dispatch}, data) {
-        return new Promise(async (resolve, reject) => {
-            if (state.openpgpStatus !== "success") {
-                reject()
-                return
-            }
-            //
+    rsaDecrypt({state, dispatch}, data) {
+        return new Promise(async resolve => {
             if (!$A.isJson(data)) {
                 data = {encrypted: data}
             }
             const encrypted = data.encrypted || data.text
-            const privateKeyArmored = data.privateKey || data.key || state.openpgpData.privateKey
-            const privateKey = await openpgp.decryptKey({
-                privateKey: await openpgp.readPrivateKey({armoredKey: privateKeyArmored}),
-                passphrase: `#${state.userId}`
-            })
+            const privateKey = data.privateKey || data.key || (await dispatch("rsaGetLocalKey")).privateKey
             //
-            const {data: decryptData} = await openpgp.decrypt({
-                message: await openpgp.readMessage({armoredMessage: encrypted}),
-                decryptionKeys: privateKey
-            })
-            resolve($A.jsonParse(decryptData).message)
+            const crypt = new JSEncrypt()
+            crypt.setPrivateKey(privateKey);
+            //
+            const array = []
+            if ($A.isArray(encrypted)) {
+                array.push(...encrypted.map(entry => crypt.decrypt($urlSafe(entry, false))))
+            } else {
+                array.push(crypt.decrypt($urlSafe(encrypted, false)))
+            }
+            const content = array.join()
+            resolve($A.jsonParse(Base64.decode(content)))
         })
     }
 }

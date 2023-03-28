@@ -171,11 +171,8 @@ export default {
     formLabelPosition: $A(window).width() > 576 ? 'right' : 'top',
     formLabelWidth: $A(window).width() > 576 ? 'auto' : '',
 
-    // 接口公钥
-    apiRsaPublicKey: null,
-
-    // openpgp
-    openpgpStatus: "none",
-    openpgpData: null,
-    openpgpLock: false,
+    // rsa
+    rsaLocalLock: false,
+    rsaLocalKeyPair: {},
+    rsaApiPublicKey: null,
 };
