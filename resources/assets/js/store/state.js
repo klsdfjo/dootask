@@ -173,4 +173,9 @@ export default {
 
     // 接口公钥
     apiRsaPublicKey: null,
+
+    // openpgp
+    openpgpStatus: "none",
+    openpgpData: null,
+    openpgpLock: false,
 };

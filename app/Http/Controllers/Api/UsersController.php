@@ -13,6 +13,7 @@ use App\Models\UserCheckinRecord;
 use App\Models\UserDelete;
 use App\Models\UserDepartment;
 use App\Models\UserEmailVerification;
+use App\Models\UserPgp;
 use App\Models\UserTransfer;
 use App\Models\WebSocket;
 use App\Models\WebSocketDialog;
@@ -1617,5 +1618,45 @@ class UsersController extends AbstractController
             return Base::retError('error');
         }
         return Base::retSuccess('success', $row);
+    }
+
+    /**
+     * @api {get} api/users/pgp/status          27. 获取pgp状态
+     *
+     * @apiDescription 需要token身份
+     * @apiVersion 1.0.0
+     * @apiGroup users
+     * @apiName pgp__status
+     *
+     * @apiParam {String} public_key    公钥
+     *
+     * @apiSuccess {Number} ret     返回状态码（1正确、0错误）
+     * @apiSuccess {String} msg     返回信息（错误描述）
+     * @apiSuccess {Object} data    返回数据
+     */
+    public function pgp__status()
+    {
+        $user = User::auth();
+        //
+        $pgp = UserPgp::whereUserid($user->userid)->first();
+        if ($pgp) {
+            // 已存在
+            return Base::retError('已存在', [], -7001);
+        }
+        // 创建新的
+        $publicKey = trim(Request::input('public_key'));
+        if (empty($publicKey)) {
+            return Base::retError('参数错误');
+        }
+        $userPgp = UserPgp::createInstance([
+            'userid' => $user->userid,
+            'public_key' => $publicKey,
+        ]);
+        $userPgp->save();
+        //
+        return Base::retSuccess('success', [
+            'status' => 'success',
+            'id' => $userPgp->id,
+        ]);
     }
 }

@@ -14,14 +14,6 @@ export default {
         return new Promise(async resolve => {
             let action = null
 
-            // 获取公钥（不需要等待）
-            dispatch("call", {
-                url: "system/rsa/public",
-                encrypt: false,
-            }).then(({data}) => {
-                state.apiRsaPublicKey = data.public;
-            })
-
             // 迁移缓存
             const initTag = await $A.IDBBoolean("initTag")
             if (!initTag) {
@@ -86,7 +78,17 @@ export default {
             }
             state.themeIsDark = $A.dark.isDarkEnabled()
 
-            //
+            // 服务器公钥、个人秘钥
+            dispatch("call", {
+                url: "system/rsa/public",
+                encrypt: false,
+            }).then(({data}) => {
+                state.apiRsaPublicKey = data.public;
+            }).finally(_ => {
+                dispatch("openpgpGetKey")
+            })
+
+            // 加载语言包
             $A.loadScriptS([
                 `language/web/key.js`,
                 `language/web/${languageType}.js`,
@@ -119,13 +121,11 @@ export default {
             params.header = header
         }
         if (params.encrypt === undefined && $A.inArray(params.url, [
-            'users/*',
-            'project/*',
-            'system/*',
-            'dialog/*',
-            'file/*',
-            'report/*',
-            'public/*',
+            'users/login',
+            'users/editpass',
+            'users/operation',
+            'users/delete/account',
+            'dialog/msg/send*',
         ], true)) {
             params.encrypt = true
         }
@@ -3193,40 +3193,73 @@ export default {
     /** *****************************************************************************************/
 
     /**
-     * 获取密钥对（不存在自动创建）
+     * 创建密钥对
      * @param state
      * @returns {Promise<unknown>}
      */
-    openpgpKey({state}) {
-        return new Promise(async resolve => {
-            if ($A.isJson(state.__openpgpKeyData)) {
-                resolve(state.__openpgpKeyData)
+    openpgpGenerate({state}) {
+        return openpgp.generateKey({
+            type: 'ecc',
+            curve: 'p256',
+            passphrase: `#${state.userId}`,
+            userIDs: [{userid: state.userId}],
+        })
+    },
+
+    /**
+     * 获取密钥对（不存在自动创建）
+     * @param state
+     * @param dispatch
+     * @returns {Promise<unknown>}
+     */
+    openpgpGetKey({state, dispatch}) {
+        return new Promise(async (resolve, reject) => {
+            if (state.userId === 0) {
+                reject()
                 return
             }
             //
-            while (state.__openpgpKeyLock === true) {
-                await new Promise(r => setTimeout(r, 50));
+            if ($A.isJson(state.openpgpData)) {
+                resolve(state.openpgpData)
+                return
             }
-            state.__openpgpKeyLock = true
             //
-            const one = await $db.pgp.where({name: `key_${state.userId}`}).first()
-            let data = $A.jsonParse(one ? one.content: {})
+            while (state.openpgpLock === true) {
+                await new Promise(r => setTimeout(r, 100));
+            }
+            state.openpgpLock = true
+            //
+            const one = await $db.pgp.where({name: `#${state.userId}`}).first()
+            const data = $A.jsonParse(one ? one.content: {})
             if (data.publicKey && data.privateKey) {
-                resolve(state.__openpgpKeyData = data)
-                state.__openpgpKeyLock = false
+                resolve(state.openpgpData = data)
+                state.openpgpLock = false
                 return
             }
             //
-            data = await openpgp.generateKey({
-                type: 'ecc',
-                curve: 'p256',
-                passphrase: `#${state.userId}`,
-                userIDs: [{userid: state.userId}],
+            const pair = await dispatch("openpgpGenerate")
+            dispatch("call", {
+                url: "users/pgp/status",
+                data: {
+                    public_key: pair.publicKey
+                }
+            }).then(async ({data}) => {
+                // 未创建过密钥对已保存新的密钥对
+                pair.id = data.id
+                await $db.pgp.where({name: `#${state.userId}`}).delete()
+                await $db.pgp.add({name: `#${state.userId}`, content: $A.jsonStringify(pair)})
+                resolve(state.openpgpData = pair)
+                state.openpgpStatus = "success"
+            }).catch(({ret, msg}) => {
+                reject(msg)
+                if (ret === -7001) {
+                    state.openpgpStatus = "wait"  // 已经创建过密钥对需要通过其他设备传过来
+                } else {
+                    state.openpgpStatus = "error"
+                }
+            }).finally(_ => {
+                state.openpgpLock = false
             })
-            await $db.pgp.where({name: `key_${state.userId}`}).delete()
-            await $db.pgp.add({name: `key_${state.userId}`, content: $A.jsonStringify(data)})
-            resolve(state.__openpgpKeyData = data)
-            state.__openpgpKeyLock = false
         })
     },
 
@@ -3234,16 +3267,21 @@ export default {
      * 加密
      * @param state
      * @param dispatch
-     * @param data
+     * @param data {message:any, ?publicKey:string}
      * @returns {Promise<unknown>}
      */
     openpgpEncrypt({state, dispatch}, data) {
-        return new Promise(async resolve => {
+        return new Promise(async (resolve, reject) => {
+            if (state.openpgpStatus !== "success") {
+                reject()
+                return
+            }
+            //
             if (!$A.isJson(data)) {
                 data = {message: data}
             }
             const message = data.message || data.text
-            const publicKeyArmored = data.publicKey || data.key || (await dispatch("openpgpKey")).publicKey
+            const publicKeyArmored = data.publicKey || data.key || state.openpgpData.publicKey
             const publicKey = await openpgp.readKey({armoredKey: publicKeyArmored})
             //
             const encrypted = await openpgp.encrypt({
@@ -3258,16 +3296,21 @@ export default {
      * 解密
      * @param state
      * @param dispatch
-     * @param data
+     * @param data {encrypted:any, ?privateKey:string}
      * @returns {Promise<unknown>}
      */
     openpgpDecrypt({state, dispatch}, data) {
-        return new Promise(async resolve => {
+        return new Promise(async (resolve, reject) => {
+            if (state.openpgpStatus !== "success") {
+                reject()
+                return
+            }
+            //
             if (!$A.isJson(data)) {
                 data = {encrypted: data}
             }
             const encrypted = data.encrypted || data.text
-            const privateKeyArmored = data.privateKey || data.key || (await dispatch("openpgpKey")).privateKey
+            const privateKeyArmored = data.privateKey || data.key || state.openpgpData.privateKey
             const privateKey = await openpgp.decryptKey({
                 privateKey: await openpgp.readPrivateKey({armoredKey: privateKeyArmored}),
                 passphrase: `#${state.userId}`
