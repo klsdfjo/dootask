@@ -22,6 +22,9 @@ class WebApi
         global $_A;
         $_A = [];
 
+        Rsa::load();
+        Doo::load();
+
         if ($request->isMethod('post')) {
             $version = $request->header('version');
             if ($version && version_compare($version, '0.25.48', '<')) {
@@ -45,8 +48,6 @@ class WebApi
         if (in_array(strtolower($APP_SCHEME), ['https', 'on', 'ssl', '1', 'true', 'yes'], true)) {
             $request->setTrustedProxies([$request->getClientIp()], $request::HEADER_X_FORWARDED_PROTO);
         }
-
-        Doo::load();
 
         return $next($request);
     }

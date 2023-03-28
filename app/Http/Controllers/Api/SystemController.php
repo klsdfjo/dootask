@@ -1178,9 +1178,8 @@ class SystemController extends AbstractController
     public function rsa__public()
     {
         $rsa = new Rsa();
-        $public = $rsa->getPublicKey();
         return Base::retSuccess("success", [
-            'public' => $public,
+            'public' => $rsa->getPublicKey(),
         ]);
     }
 }

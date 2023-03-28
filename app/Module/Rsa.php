@@ -4,6 +4,7 @@ namespace App\Module;
 
 class Rsa
 {
+    private static $rsa;
     private string $privateKey;
     private string $publicKey;
 
@@ -26,11 +27,6 @@ class Rsa
         return $this;
     }
 
-    public function getPrivateKey(): string
-    {
-        return $this->privateKey;
-    }
-
     public function getPublicKey(): string
     {
         return $this->publicKey;
@@ -50,6 +46,19 @@ class Rsa
         return $data;
     }
 
+    public static function load()
+    {
+        self::$rsa = new self();
+    }
+
+    public static function rsa()
+    {
+        if (self::$rsa == null) {
+            self::load();
+        }
+        return self::$rsa;
+    }
+
     /**
      * 解密接口数据
      * @param $value
@@ -57,8 +66,7 @@ class Rsa
      */
     public static function decryptApiData($value)
     {
-        $rsa = new self();
-        $data = $rsa->decrypt($value);
+        $data = self::rsa()->decrypt($value);
         if (is_array($data)) {
             $data = implode($data);
         }
