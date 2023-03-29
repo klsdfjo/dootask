@@ -10,6 +10,7 @@ use FFI;
 class Doo
 {
     private static $doo;
+    private static $passphrase = "LYHevk5n";
 
     /**
      * char转为字符串
@@ -45,10 +46,19 @@ class Doo
                 char* md5s(char* text, char* password);
                 char* macs();
                 char* dooSN();
+                char* pgpGenerateKeyPair(char* name, char* email, char* passphrase);
             EOF, "/usr/lib/doo/doo.so");
         $token = $token ?: Base::headerOrInput('token');
         $language = $language ?: Base::headerOrInput('language');
         self::$doo->initialize("/var/www", $token, $language);
+        //
+        $priPath = config_path("PGP_PRIVATE");
+        $pubPath = config_path("PGP_PUBLIC");
+        if (!file_exists($priPath) || !file_exists($pubPath)) {
+            $data = self::pgpGenerateKeyPair("doo", "admin@admin.com", self::$passphrase);
+            file_put_contents($priPath, $data['private_key']);
+            file_put_contents($pubPath, $data['public_key']);
+        }
     }
 
     /**
@@ -298,5 +308,124 @@ class Doo
     public static function dooSN(): string
     {
         return self::string(self::doo()->dooSN());
+    }
+
+    /**
+     * 生成PGP密钥对
+     * @param $name
+     * @param $email
+     * @param string $passphrase
+     * @return array
+     */
+    public static function pgpGenerateKeyPair($name, $email, string $passphrase = ""): array
+    {
+        return Base::json2array(self::string(self::doo()->pgpGenerateKeyPair($name, $email, $passphrase)));
+    }
+
+    /**
+     * PGP加密
+     * @param $plaintext
+     * @param null $publicKey
+     * @return string
+     */
+    public static function pgpEncrypt($plaintext, $publicKey = null): string
+    {
+        if (empty($publicKey)) {
+            $pubPath = config_path("PGP_PUBLIC");
+            if (file_exists($pubPath)) {
+                $publicKey = file_get_contents($pubPath);
+            }
+        }
+        $gpg = new \gnupg();
+        $publicData = $gpg->import($publicKey);
+        $gpg->addencryptkey($publicData['fingerprint']);
+        return $gpg->encrypt($plaintext);
+    }
+
+    /**
+     * PGP解密
+     * @param $encryptedText
+     * @param null $privateKey
+     * @param null $passphrase
+     * @return string
+     */
+    public static function pgpDecrypt($encryptedText, $privateKey = null, $passphrase = null): string
+    {
+        if (empty($privateKey)) {
+            $priPath = config_path("PGP_PRIVATE");
+            if (file_exists($priPath)) {
+                $privateKey = file_get_contents($priPath);
+            }
+        }
+        $gpg = new \gnupg();
+        $privateData = $gpg->import($privateKey);
+        $gpg->adddecryptkey($privateData['fingerprint'], $passphrase ?: self::$passphrase);
+        return $gpg->decrypt($encryptedText);
+    }
+
+    /**
+     * 获取PGP公钥
+     * @return string
+     */
+    public static function pgpPublicKey(): string
+    {
+        $pubPath = config_path("PGP_PUBLIC");
+        if (file_exists($pubPath)) {
+            return file_get_contents($pubPath);
+        }
+        return "";
+    }
+
+    /**
+     * PGP加密API
+     * @param $plaintext
+     * @param null $publicKey
+     * @return string
+     */
+    public static function pgpEncryptApi($plaintext, $publicKey = null): string
+    {
+        $content = Base::array2json($plaintext);
+        $content = base64_encode($content);
+        return self::pgpEncrypt($content, $publicKey);
+    }
+
+    /**
+     * PGP解密API
+     * @param $encryptedText
+     * @param null $privateKey
+     * @param null $passphrase
+     * @return array
+     */
+    public static function pgpDecryptApi($encryptedText, $privateKey = null, $passphrase = null): array
+    {
+        $content = self::pgpDecrypt($encryptedText, $privateKey, $passphrase);
+        $content = base64_decode($content);
+        return Base::json2array($content);
+    }
+
+    /**
+     * 解析PGP参数
+     * @param $string
+     * @return string[]
+     */
+    public static function pgpParseStr($string): array
+    {
+        $array = [
+            'encrypt_version' => '',
+            'client_public_key' => '',
+        ];
+        $string = str_replace(";", "&", $string);
+        parse_str($string, $params);
+        foreach ($params as $key => $value) {
+            $key = strtolower(trim($key));
+            if ($key) {
+                $array[$key] = trim($value);
+            }
+        }
+        if ($array['client_public_key']) {
+            $array['client_public_key'] = url_safe(str_replace("$", "\n", $array['client_public_key']), false);
+            $array['client_public_key'] = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n" . $array['client_public_key'] . "\n-----END PGP PUBLIC KEY BLOCK-----";
+        }
+        return $array;
     }
 }

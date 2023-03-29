@@ -13,6 +13,7 @@
         "ext-gd": "*",
         "ext-json": "*",
         "ext-libxml": "*",
+        "ext-gnupg": "*",
         "ext-openssl": "*",
         "ext-simplexml": "*",
         "directorytree/ldaprecord-laravel": "^2.7",

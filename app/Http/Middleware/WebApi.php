@@ -4,8 +4,8 @@ namespace App\Http\Middleware;
 
 @error_reporting(E_ALL & ~E_NOTICE & ~E_WARNING);
 
+use App\Module\Base;
 use App\Module\Doo;
-use App\Module\Rsa;
 use Closure;
 
 class WebApi
@@ -22,10 +22,9 @@ class WebApi
         global $_A;
         $_A = [];
 
-        Rsa::load();
         Doo::load();
 
-        $encrypt = Rsa::parseStr($request->header('encrypt'));
+        $encrypt = Doo::pgpParseStr($request->header('encrypt'));
         if ($request->isMethod('post')) {
             $version = $request->header('version');
             if ($version && version_compare($version, '0.25.48', '<')) {
@@ -35,9 +34,9 @@ class WebApi
                     $request->merge($content);
                 }
                 unset($content);
-            } elseif ($encrypt['encrypt_version'] === "rsa1.0") {
+            } elseif ($encrypt['encrypt_version'] === "pgp") {
                 // 新版本解密提交的内容
-                $content = Rsa::decryptApiData($request->input('encrypted'));
+                $content = Doo::pgpDecryptApi($request->input('encrypted'));
                 if ($content) {
                     $request->merge($content);
                 }
@@ -56,7 +55,8 @@ class WebApi
         // 加密返回内容
         if ($encrypt['client_public_key'] && !empty($response->getContent())) {
             $response->setContent(json_encode([
-                'encrypted' => Rsa::encryptApiData($response->getContent(), $encrypt['client_public_key'])
+                'encrypt_version' => 'pgp',
+                'encrypted' => Doo::pgpEncryptApi($response->getContent(), $encrypt['client_public_key'])
             ]));
         }
 
