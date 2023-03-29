@@ -84,7 +84,7 @@ export default {
                 url: "system/server/pgppub",
                 encrypt: false,
             }).then(({data}) => {
-                state.pgpApiPublicKey = data.public;
+                state.pgpApiPublicKey = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n" + data.public + "\n-----END PGP PUBLIC KEY BLOCK-----";
             })
 
             // 加载语言包
@@ -169,10 +169,8 @@ export default {
                     reject({ret: -1, data: {}, msg: "Return error"})
                     return
                 }
-                if (params.encrypt === true) {
-                    if (result.encrypt_version === "pgp" && result.encrypted) {
-                        result = await dispatch("pgpDecryptApi", result.encrypted)
-                    }
+                if (params.encrypt === true && result.encrypted) {
+                    result = await dispatch("pgpDecryptApi", result.encrypted)
                 }
                 const {ret, data, msg} = result
                 if (ret === -1) {
@@ -3285,12 +3283,11 @@ export default {
     pgpEncryptApi({state, dispatch}, data) {
         return new Promise(resolve => {
             data = $A.jsonStringify(data)
-            data = Base64.encode(data)
             dispatch("pgpEncrypt", {
                 message: data,
                 publicKey: state.pgpApiPublicKey
             }).then(data => {
-                resolve(data)
+                resolve(data.replace(/\s*-----(BEGIN|END) PGP MESSAGE-----\s*/g, ''))
             })
         })
     },
@@ -3305,11 +3302,9 @@ export default {
     pgpDecryptApi({state, dispatch}, data) {
         return new Promise(resolve => {
             dispatch("pgpDecrypt", {
-                encrypted: data
+                encrypted: "-----BEGIN PGP MESSAGE-----\n\n" + data + "\n-----END PGP MESSAGE-----"
             }).then(data => {
-                data = Base64.decode(data)
-                data = $A.jsonParse(data)
-                resolve(data)
+                resolve($A.jsonParse(data))
             })
         })
     }

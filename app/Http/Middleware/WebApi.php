@@ -55,7 +55,6 @@ class WebApi
         // 加密返回内容
         if ($encrypt['client_public_key'] && !empty($response->getContent())) {
             $response->setContent(json_encode([
-                'encrypt_version' => 'pgp',
                 'encrypted' => Doo::pgpEncryptApi($response->getContent(), $encrypt['client_public_key'])
             ]));
         }

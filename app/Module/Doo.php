@@ -385,8 +385,8 @@ class Doo
     public static function pgpEncryptApi($plaintext, $publicKey = null): string
     {
         $content = Base::array2json($plaintext);
-        $content = base64_encode($content);
-        return self::pgpEncrypt($content, $publicKey);
+        $content = self::pgpEncrypt($content, $publicKey);
+        return preg_replace("/\s*-----(BEGIN|END) PGP MESSAGE-----\s*/i", "", $content);
     }
 
     /**
@@ -398,8 +398,8 @@ class Doo
      */
     public static function pgpDecryptApi($encryptedText, $privateKey = null, $passphrase = null): array
     {
-        $content = self::pgpDecrypt($encryptedText, $privateKey, $passphrase);
-        $content = base64_decode($content);
+        $content = "-----BEGIN PGP MESSAGE-----\n\n" . $encryptedText . "\n-----END PGP MESSAGE-----";
+        $content = self::pgpDecrypt($content, $privateKey, $passphrase);
         return Base::json2array($content);
     }
 

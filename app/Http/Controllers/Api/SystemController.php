@@ -1178,7 +1178,7 @@ class SystemController extends AbstractController
     public function server__pgppub()
     {
         return Base::retSuccess("success", [
-            'public' => Doo::pgpPublicKey(),
+            'public' => preg_replace("/\s*-----(BEGIN|END) PGP PUBLIC KEY BLOCK-----\s*/i", "", Doo::pgpPublicKey()),
         ]);
     }
 }
