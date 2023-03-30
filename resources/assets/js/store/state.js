@@ -179,4 +179,11 @@ export default {
     apiKeyData: {},
     localKeyPair: {},
     localKeyLock: false,
+
+    // 语音、视频通话
+    videoRtcPeer: null,         // 视频RtcPeer
+    videoChatEnable: false,     // 视频通话是否开启（否则语音）
+    videoRemoteUserid: 0,       // 远程视频会员ID
+    videoRemoteStream: null,    // 远程视频流
+    videoLocalStream: null,     // 本地视频流
 };

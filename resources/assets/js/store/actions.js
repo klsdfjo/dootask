@@ -3320,5 +3320,45 @@ export default {
                 resolve($A.jsonParse(data))
             })
         })
+    },
+
+
+    /** *****************************************************************************************/
+    /** ************************************** video ********************************************/
+    /** *****************************************************************************************/
+
+    /**
+     * 开启语音、视频通话
+     * @param state
+     * @param userid
+     * @param enable
+     */
+    openVideo({state}, {userid, enable}) {
+        window.navigator.mediaDevices.getUserMedia({
+            audio: true,
+            video: !!enable
+        }).then((stream) => {
+            state.videoChatEnable = !!enable;
+            state.videoRemoteUserid = userid;
+            state.videoLocalStream = stream;
+        }).catch(_ => {
+            $A.modalWarning('当前环境不支持音视频通话！');
+        })
+    },
+
+    /**
+     * 关闭语音、视频通话
+     * @param state
+     */
+    closeVideo({state}) {
+        return new Promise(resolve => {
+            if (state.videoLocalStream !== null) {
+                state.videoLocalStream.getTracks().forEach(track => {
+                    track.stop()
+                })
+                state.videoLocalStream = null
+            }
+            resolve()
+        })
     }
 }

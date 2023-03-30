@@ -81,6 +81,14 @@
                             <i class="taskfont">&#xe7c1;</i>
                             {{$L('新会议')}}
                         </div>
+                        <div class="chat-input-popover-item" @click="onToolbar('voice')">
+                            <i class="taskfont">&#xe7ba;</i>
+                            {{$L('语音通话')}}
+                        </div>
+                        <div class="chat-input-popover-item" @click="onToolbar('video')">
+                            <i class="taskfont">&#xe7ba;</i>
+                            {{$L('视频通话')}}
+                        </div>
                         <div v-if="canCall" class="chat-input-popover-item" @click="onToolbar('call')">
                             <i class="taskfont">&#xe7ba;</i>
                             {{$L('拨打电话')}}
@@ -1010,6 +1018,8 @@ export default {
 
                 case 'image':
                 case 'file':
+                case 'voice':
+                case 'video':
                 case 'call':
                 case 'anon':
                     this.$emit('on-more', action)

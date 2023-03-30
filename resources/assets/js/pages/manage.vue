@@ -281,6 +281,9 @@
             <ProjectArchived v-if="archivedProjectShow"/>
         </DrawerOverlay>
 
+        <!--语音、视频聊天-->
+        <VideoModal/>
+
         <!--会议管理-->
         <MeetingManager/>
 
@@ -310,11 +313,13 @@ import DialogModal from "./manage/components/DialogModal";
 import TaskModal from "./manage/components/TaskModal";
 import CheckinExport from "./manage/components/CheckinExport";
 import TaskExport from "./manage/components/TaskExport";
+import VideoModal from "./manage/components/VideoModal.vue";
 import notificationKoro from "notification-koro1";
 import {Store} from "le5le-store";
 
 export default {
     components: {
+        VideoModal,
         TaskExport,
         CheckinExport,
         TaskModal,

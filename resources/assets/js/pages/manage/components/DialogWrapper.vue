@@ -1575,6 +1575,11 @@ export default {
                     this.$refs.chatUpload.handleClick()
                     break;
 
+                case 'voice':
+                case 'video':
+                    this.onVideoConnect(e)
+                    break;
+
                 case 'call':
                     this.onCallTel()
                     break;
@@ -1582,6 +1587,17 @@ export default {
                     this.onAnon()
                     break;
             }
+        },
+
+        onVideoConnect(type) {
+            if (this.dialogData.type !== 'user' || this.dialogData.bot) {
+                $A.modalWarning("语音/视频通话仅支持个人聊天");
+                return
+            }
+            this.$store.dispatch("openVideo", {
+                userid: this.userId,
+                enable: type === 'video'
+            })
         },
 
         onCallTel() {
