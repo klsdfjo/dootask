@@ -4,6 +4,7 @@ namespace App\Module;
 
 use App\Exceptions\ApiException;
 use App\Models\User;
+use Cache;
 use Carbon\Carbon;
 use FFI;
 
@@ -47,6 +48,8 @@ class Doo
                 char* macs();
                 char* dooSN();
                 char* pgpGenerateKeyPair(char* name, char* email, char* passphrase);
+                char* pgpEncrypt(char* plainText, char* publicKey);
+                char* pgpDecrypt(char* cipherText, char* privateKey, char* passphrase);
             EOF, "/usr/lib/doo/doo.so");
         $token = $token ?: Base::headerOrInput('token');
         $language = $language ?: Base::headerOrInput('language');
@@ -325,64 +328,42 @@ class Doo
     /**
      * PGP加密
      * @param $plaintext
-     * @param null $publicKey
+     * @param $publicKey
      * @return string
      */
-    public static function pgpEncrypt($plaintext, $publicKey = null): string
+    public static function pgpEncrypt($plaintext, $publicKey): string
     {
-        if (empty($publicKey)) {
-            $pubPath = config_path("PGP_PUBLIC");
-            if (file_exists($pubPath)) {
-                $publicKey = file_get_contents($pubPath);
-            }
+        if (strlen($publicKey) < 50) {
+            $keyCache = Base::json2array(Cache::get("KeyPair::" . $publicKey));
+            $publicKey = $keyCache['public_key'];
         }
-        $gpg = new \gnupg();
-        $publicData = $gpg->import($publicKey);
-        $gpg->addencryptkey($publicData['fingerprint']);
-        return $gpg->encrypt($plaintext);
+        return self::string(self::doo()->pgpEncrypt($plaintext, $publicKey));
     }
 
     /**
      * PGP解密
      * @param $encryptedText
-     * @param null $privateKey
+     * @param $privateKey
      * @param null $passphrase
      * @return string
      */
-    public static function pgpDecrypt($encryptedText, $privateKey = null, $passphrase = null): string
+    public static function pgpDecrypt($encryptedText, $privateKey, $passphrase = null): string
     {
-        if (empty($privateKey)) {
-            $priPath = config_path("PGP_PRIVATE");
-            if (file_exists($priPath)) {
-                $privateKey = file_get_contents($priPath);
-            }
+        if (strlen($privateKey) < 50) {
+            $keyCache = Base::json2array(Cache::get("KeyPair::" . $privateKey));
+            $privateKey = $keyCache['private_key'];
+            $passphrase = $keyCache['passphrase'];
         }
-        $gpg = new \gnupg();
-        $privateData = $gpg->import($privateKey);
-        $gpg->adddecryptkey($privateData['fingerprint'], $passphrase ?: self::$passphrase);
-        return $gpg->decrypt($encryptedText);
-    }
-
-    /**
-     * 获取PGP公钥
-     * @return string
-     */
-    public static function pgpPublicKey(): string
-    {
-        $pubPath = config_path("PGP_PUBLIC");
-        if (file_exists($pubPath)) {
-            return file_get_contents($pubPath);
-        }
-        return "";
+        return self::string(self::doo()->pgpDecrypt($encryptedText, $privateKey, $passphrase));
     }
 
     /**
      * PGP加密API
      * @param $plaintext
-     * @param null $publicKey
+     * @param $publicKey
      * @return string
      */
-    public static function pgpEncryptApi($plaintext, $publicKey = null): string
+    public static function pgpEncryptApi($plaintext, $publicKey): string
     {
         $content = Base::array2json($plaintext);
         $content = self::pgpEncrypt($content, $publicKey);
@@ -396,7 +377,7 @@ class Doo
      * @param null $passphrase
      * @return array
      */
-    public static function pgpDecryptApi($encryptedText, $privateKey = null, $passphrase = null): array
+    public static function pgpDecryptApi($encryptedText, $privateKey, $passphrase = null): array
     {
         $content = "-----BEGIN PGP MESSAGE-----\n\n" . $encryptedText . "\n-----END PGP MESSAGE-----";
         $content = self::pgpDecrypt($content, $privateKey, $passphrase);
@@ -411,8 +392,10 @@ class Doo
     public static function pgpParseStr($string): array
     {
         $array = [
-            'encrypt_version' => '',
-            'client_public_key' => '',
+            'encrypt_type' => '',
+            'encrypt_id' => '',
+            'client_type' => '',
+            'client_key' => '',
         ];
         $string = str_replace(";", "&", $string);
         parse_str($string, $params);
@@ -422,9 +405,9 @@ class Doo
                 $array[$key] = trim($value);
             }
         }
-        if ($array['client_public_key']) {
-            $array['client_public_key'] = url_safe(str_replace("$", "\n", $array['client_public_key']), false);
-            $array['client_public_key'] = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n" . $array['client_public_key'] . "\n-----END PGP PUBLIC KEY BLOCK-----";
+        if ($array['client_type'] === 'pgp' && $array['client_key']) {
+            $array['client_key'] = str_replace(["-", "_", "$"], ["+", "/", "\n"], $array['client_key']);
+            $array['client_key'] = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n" . $array['client_key'] . "\n-----END PGP PUBLIC KEY BLOCK-----";
         }
         return $array;
     }

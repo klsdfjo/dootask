@@ -1162,23 +1162,4 @@ class SystemController extends AbstractController
         }
         return $array;
     }
-
-    /**
-     * @api {get} api/system/server/pgppub          25. 获取服务器公钥
-     *
-     * @apiDescription 获取服务器PGP公钥
-     * @apiVersion 1.0.0
-     * @apiGroup system
-     * @apiName server__pgppub
-     *
-     * @apiSuccess {Number} ret     返回状态码（1正确、0错误）
-     * @apiSuccess {String} msg     返回信息（错误描述）
-     * @apiSuccess {Object} data    返回数据
-     */
-    public function server__pgppub()
-    {
-        return Base::retSuccess("success", [
-            'public' => preg_replace("/\s*-----(BEGIN|END) PGP PUBLIC KEY BLOCK-----\s*/i", "", Doo::pgpPublicKey()),
-        ]);
-    }
 }

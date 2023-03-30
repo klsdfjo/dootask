@@ -33,14 +33,12 @@ class WebApi
                 if ($content) {
                     $request->merge($content);
                 }
-                unset($content);
-            } elseif ($encrypt['encrypt_version'] === "pgp") {
+            } elseif ($encrypt['encrypt_type'] === 'pgp' && $content = $request->input('encrypted')) {
                 // 新版本解密提交的内容
-                $content = Doo::pgpDecryptApi($request->input('encrypted'));
+                $content = Doo::pgpDecryptApi($content, $encrypt['encrypt_id']);
                 if ($content) {
                     $request->merge($content);
                 }
-                unset($content);
             }
         }
 
@@ -53,9 +51,9 @@ class WebApi
         $response = $next($request);
 
         // 加密返回内容
-        if ($encrypt['client_public_key'] && !empty($response->getContent())) {
+        if ($encrypt['client_type'] === 'pgp' && $content = $response->getContent()) {
             $response->setContent(json_encode([
-                'encrypted' => Doo::pgpEncryptApi($response->getContent(), $encrypt['client_public_key'])
+                'encrypted' => Doo::pgpEncryptApi($content, $encrypt['client_key'])
             ]));
         }
 

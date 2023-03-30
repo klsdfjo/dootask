@@ -1543,7 +1543,8 @@ class ProjectController extends AbstractController
     public function task__add()
     {
         User::auth();
-        parse_str(Request::getContent(), $data);
+        //
+        $data = Request::input();
         $project_id = intval($data['project_id']);
         $column_id = $data['column_id'];
         // 项目
@@ -1663,7 +1664,7 @@ class ProjectController extends AbstractController
     {
         User::auth();
         //
-        parse_str(Request::getContent(), $data);
+        $data = Request::input();
         $task_id = intval($data['task_id']);
         //
         $task = ProjectTask::userTask($task_id, true, true, 2);

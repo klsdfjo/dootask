@@ -1,6 +1,6 @@
 export default {
-    // 随机字符串
-    randString: $A.randomString(8),
+    // 客户端ID（希望不变的，除非清除浏览器缓存或者卸载应用）
+    clientId: "",
 
     // 是否移动端（支持触摸）
     supportTouch: "ontouchend" in document,
@@ -174,8 +174,8 @@ export default {
     formLabelPosition: $A(window).width() > 576 ? 'right' : 'top',
     formLabelWidth: $A(window).width() > 576 ? 'auto' : '',
 
-    // pgp
-    pgpLocalLock: false,
-    pgpLocalKeyPair: {},
-    pgpApiPublicKey: null,
+    // 加密相关
+    apiKeyData: {},
+    localKeyPair: {},
+    localKeyLock: false,
 };

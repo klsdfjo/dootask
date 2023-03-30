@@ -16,17 +16,6 @@ if (!function_exists('seeders_at')) {
     }
 }
 
-if (!function_exists('url_safe')) {
-    function url_safe($data, $encode = true)
-    {
-        if ($encode) {
-            return str_replace(['+', '/'], ['-', '_'], $data);
-        } else {
-            return str_replace(['-', '_'], ['+', '/'], $data);
-        }
-    }
-}
-
 if (!function_exists('md5s')) {
     function md5s($val, $len = 16)
     {

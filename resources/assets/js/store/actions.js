@@ -1,6 +1,5 @@
 import {Store} from 'le5le-store';
 import * as openpgp from 'openpgp/lightweight';
-import {Base64} from "js-base64";
 import {languageType} from "../language";
 import {$callData, $urlSafe} from './utils'
 
@@ -28,6 +27,7 @@ export default {
             }
 
             // 读取缓存
+            state.clientId = await $A.IDBString("clientId")
             state.cacheServerUrl = await $A.IDBString("cacheServerUrl")
             state.cacheUserBasic = await $A.IDBArray("cacheUserBasic")
             state.cacheDialogs = (await $A.IDBArray("cacheDialogs")).map(item => Object.assign(item, {loading: false, extra_draft_has: item.extra_draft_content ? 1 : 0}))
@@ -42,13 +42,19 @@ export default {
             state.callAt = await $A.IDBArray("callAt")
             state.cacheEmojis = await $A.IDBArray("cacheEmojis")
 
+            // 客户端ID
+            if (!state.clientId) {
+                state.clientId = $A.randomString(6)
+                await $A.IDBSet("clientId", state.clientId)
+            }
+
             // 清理缓存
             const clearCache = await $A.IDBString("clearCache")
             if (clearCache) {
                 await $A.IDBRemove("clearCache")
                 await $A.IDBSet("callAt", state.callAt = [])
                 if (clearCache === "handle") {
-                    action = "clearCacheSuccess"
+                    await dispatch(action = "handleClearCache")
                 }
             }
 
@@ -79,12 +85,12 @@ export default {
             }
             state.themeIsDark = $A.dark.isDarkEnabled()
 
-            // 服务器公钥
             dispatch("call", {
-                url: "system/server/pgppub",
+                url: "users/key/client",
+                data: {client_id: state.clientId},
                 encrypt: false,
             }).then(({data}) => {
-                state.pgpApiPublicKey = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n" + data.public + "\n-----END PGP PUBLIC KEY BLOCK-----";
+                state.apiKeyData = data;
             })
 
             // 加载语言包
@@ -101,7 +107,7 @@ export default {
      * 访问接口
      * @param state
      * @param dispatch
-     * @param params // {url,data,method,timeout,header,spinner,websocket, before,complete,success,error,after,encrypt}
+     * @param params // {url,data,method,timeout,header,spinner,websocket,encrypt, before,complete,success,error,after}
      * @returns {Promise<unknown>}
      */
     call({state, dispatch}, params) {
@@ -124,7 +130,7 @@ export default {
             'users/editpass',
             'users/operation',
             'users/delete/account',
-            'dialog/msg/send*',
+            'dialog/msg/*',
         ], true)) {
             params.encrypt = true
         }
@@ -136,14 +142,20 @@ export default {
             // 加密传输
             const encrypt = []
             if (params.encrypt === true) {
-                if (params.data && state.pgpApiPublicKey) {
-                    encrypt.push("encrypt_version=pgp")
-                    params.method = "post"  // 加密传输时强制使用post
-                    params.data = {encrypted: await dispatch("pgpEncryptApi", params.data)}
+                // 有数据才加密
+                if (params.data) {
+                    // PGP加密
+                    if (state.apiKeyData.type === 'pgp') {
+                        encrypt.push(`encrypt_type=${state.apiKeyData.type};encrypt_id=${state.apiKeyData.id}`)
+                        params.method = "post"  // 加密传输时强制使用post
+                        params.data = {encrypted: await dispatch("pgpEncryptApi", params.data)}
+                    }
                 }
-                encrypt.push("client_public_key=" + $urlSafe((await dispatch("pgpGetLocalKey")).publicKeyB64))
+                encrypt.push("client_type=pgp;client_key=" + $urlSafe((await dispatch("pgpGetLocalKey")).publicKeyB64))
             }
-            params.header.encrypt = encrypt.join(";")
+            if (encrypt.length > 0) {
+                params.header.encrypt = encrypt.join(";")
+            }
             // 数据转换
             if (params.method === "post") {
                 params.data = JSON.stringify(params.data)
@@ -707,6 +719,7 @@ export default {
                 const cacheLoginEmail = await $A.IDBString("cacheLoginEmail");
                 const cacheFileSort = await $A.IDBJson("cacheFileSort");
                 await $A.IDBClear();
+                await $A.IDBSet("clientId", state.clientId);
                 await $A.IDBSet("cacheServerUrl", state.cacheServerUrl);
                 await $A.IDBSet("cacheProjectParameter", state.cacheProjectParameter);
                 await $A.IDBSet("cacheLoginEmail", cacheLoginEmail);
@@ -3187,7 +3200,7 @@ export default {
             const data = await openpgp.generateKey({
                 type: 'ecc',
                 curve: 'curve25519',
-                passphrase: state.randString,
+                passphrase: state.clientId,
                 userIDs: [{name: 'doo', email: 'admin@admin.com'}],
             })
             data.publicKeyB64 = data.publicKey.replace(/\s*-----(BEGIN|END) PGP PUBLIC KEY BLOCK-----\s*/g, '').replace(/\n+/g, '$')
@@ -3204,21 +3217,21 @@ export default {
     pgpGetLocalKey({state, dispatch}) {
         return new Promise(async resolve => {
             // 已存在
-            if (state.pgpLocalKeyPair.privateKey) {
-                return resolve(state.pgpLocalKeyPair)
+            if (state.localKeyPair.privateKey) {
+                return resolve(state.localKeyPair)
             }
             // 避免重复生成
-            while (state.pgpLocalLock === true) {
+            while (state.localKeyLock === true) {
                 await new Promise(r => setTimeout(r, 100));
             }
-            if (state.pgpLocalKeyPair.privateKey) {
-                return resolve(state.pgpLocalKeyPair)
+            if (state.localKeyPair.privateKey) {
+                return resolve(state.localKeyPair)
             }
             // 生成密钥对
-            state.pgpLocalLock = true
-            state.pgpLocalKeyPair = await dispatch("pgpGenerate")
-            state.pgpLocalLock = false
-            resolve(state.pgpLocalKeyPair)
+            state.localKeyLock = true
+            state.localKeyPair = await dispatch("pgpGenerate")
+            state.localKeyLock = false
+            resolve(state.localKeyPair)
         })
     },
 
@@ -3262,7 +3275,7 @@ export default {
             const privateKeyArmored = data.privateKey || data.key || (await dispatch("pgpGetLocalKey")).privateKey
             const decryptionKeys = await openpgp.decryptKey({
                 privateKey: await openpgp.readPrivateKey({armoredKey: privateKeyArmored}),
-                passphrase: data.passphrase || state.randString
+                passphrase: data.passphrase || state.clientId
             })
             //
             const {data: decryptData} = await openpgp.decrypt({
@@ -3285,7 +3298,7 @@ export default {
             data = $A.jsonStringify(data)
             dispatch("pgpEncrypt", {
                 message: data,
-                publicKey: state.pgpApiPublicKey
+                publicKey: state.apiKeyData.key
             }).then(data => {
                 resolve(data.replace(/\s*-----(BEGIN|END) PGP MESSAGE-----\s*/g, ''))
             })
