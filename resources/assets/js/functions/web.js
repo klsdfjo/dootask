@@ -841,6 +841,27 @@
                 || /^(10)\./.test(u)
                 || /^(172)\.(1[6-9]|2[0-9]|3[0-1])\./.test(u)
                 || /^(192)\.(168)\./.test(u);
+        },
+
+        /**
+         * 是否为错误数据
+         * @param data
+         * @returns {boolean}
+         */
+        isError(data) {
+            if (!$A.isJson(data)) {
+                return true
+            }
+            return data.ret === undefined || parseInt(data.ret) <= 0
+        },
+
+        /**
+         * 是否为正确数据
+         * @param data
+         * @returns {boolean}
+         */
+        isSuccess(data) {
+            return !this.isError(data)
         }
     });
 

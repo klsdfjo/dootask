@@ -3,6 +3,8 @@
 namespace App\Models;
 
 
+use App\Module\Base;
+
 /**
  * App\Models\WebSocket
  *
@@ -27,4 +29,26 @@ namespace App\Models;
  */
 class WebSocket extends AbstractModel
 {
+    /**
+     * 通过会员ID获取fd
+     * @param $userid
+     * @return array
+     */
+    public static function getFds($userid)
+    {
+        if (is_array($userid)) {
+            $userid = Base::arrayRetainInt($userid);
+        } else {
+            $userid = intval($userid);
+        }
+        if (empty($userid)) {
+            return [];
+        }
+        if (is_array($userid)) {
+            $fds = WebSocket::whereIn("userid", $userid)->pluck('fd')->toArray();
+        } else {
+            $fds = WebSocket::whereUserid($userid)->pluck('fd')->toArray();
+        }
+        return $fds;
+    }
 }

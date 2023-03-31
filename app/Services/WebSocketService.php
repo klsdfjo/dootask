@@ -138,6 +138,22 @@ class WebSocketService implements WebSocketHandlerInterface
                     }
                 }
                 return;
+
+            /**
+             * 发送消息
+             */
+            case 'sendMsg':
+                $fds = WebSocket::getFds($data['userid']);
+                if (empty($fds)) {
+                    $reData = Base::retError('对方不在线');
+                } else {
+                    PushTask::push([
+                        'fd' => $fds,
+                        'msg' => $data['msg']
+                    ]);
+                    $reData = Base::retSuccess('success');
+                }
+                break;
         }
         //
         if ($msgId) {

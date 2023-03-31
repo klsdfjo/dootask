@@ -167,7 +167,15 @@ export default {
     },
 
     computed: {
-        ...mapState(['videoChatEnable', 'videoLocalStream', 'videoRemoteUserid', 'cacheUserBasic']),
+        ...mapState([
+            'wsMsg',
+
+            'videoChatEnable',
+            'videoLocalStream',
+            'videoRemoteUserid',
+
+            'cacheUserBasic'
+        ]),
 
         visible() {
             return this.videoLocalStream !== null
@@ -191,7 +199,24 @@ export default {
                     this.$refs.localVideo.srcObject = visible ? this.videoLocalStream : null
                 }
             })
-        }
+        },
+
+        wsMsg: {
+            handler(info) {
+                const {type, action} = info;
+                switch (type) {
+                    case 'video':
+                        if (action == 'call') {
+                            this.$store.dispatch("audioPlay", {
+                                src: $A.originUrl("audio/call.wav"),
+                                loop: true
+                            })
+                        }
+                        break;
+                }
+            },
+            deep: true,
+        },
     },
 
     methods: {
@@ -203,8 +228,27 @@ export default {
         },
 
         onLoadedmetadata() {
-            // todo 本地加载完成 通知对方
-            console.log('通知对方');
+            // 本地加载完成 通知对方
+            this.$store.dispatch("websocketSend", {
+                type: 'sendMsg',
+                data: {
+                    userid: this.videoRemoteUserid,
+                    msg: {
+                        type: 'video',
+                        action: 'call',
+                        enable: this.videoChatEnable,
+                    },
+                },
+                callback: data => {
+                    if ($A.isError(data)) {
+                        $A.modalError(data.msg || '发起失败');
+                        this.onBeforeClose()
+                    }
+                }
+            }).catch(_ => {
+                $A.modalError('发起失败');
+                this.onBeforeClose()
+            })
         }
     }
 }

@@ -1595,7 +1595,7 @@ export default {
                 return
             }
             this.$store.dispatch("openVideo", {
-                userid: this.userId,
+                userid: this.dialogData.dialog_user.userid,
                 enable: type === 'video'
             })
         },

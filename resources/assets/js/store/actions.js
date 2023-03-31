@@ -2766,9 +2766,13 @@ export default {
      * 播放音频
      * @param state
      * @param dispatch
-     * @param src
+     * @param data
      */
-    audioPlay({state, dispatch}, src) {
+    audioPlay({state, dispatch}, data) {
+        if (!$A.isJson(data)) {
+            data = {src: data, loop: false}
+        }
+        //
         const old = document.getElementById("__audio_play_element__")
         if (old) {
             // 删除已存在
@@ -2776,7 +2780,7 @@ export default {
             old.src = null
             old.parentNode.removeChild(old);
         }
-        if (!src || src === state.audioPlaying) {
+        if (!data.src || data.src === state.audioPlaying) {
             // 空地址或跟现在播放的地址一致时仅停止
             state.audioPlaying = null
             return
@@ -2785,9 +2789,9 @@ export default {
         const audio = document.createElement("audio")
         audio.id = state.audioPlayId = "__audio_play_element__"
         audio.controls = false
-        audio.loop = false
+        audio.loop = data.loop
         audio.volume = 1
-        audio.src = state.audioPlaying = src
+        audio.src = state.audioPlaying = data.src
         audio.onended = _ => {
             dispatch("audioStop", audio.src)
         }
@@ -2875,7 +2879,7 @@ export default {
                     break
 
                 case "receipt":
-                    typeof state.wsCall[msgId] === "function" && state.wsCall[msgId](msgDetail.body, true);
+                    typeof state.wsCall[msgId] === "function" && state.wsCall[msgId](msgDetail.data, true);
                     delete state.wsCall[msgId];
                     break
 
@@ -3334,6 +3338,10 @@ export default {
      * @param enable
      */
     openVideo({state}, {userid, enable}) {
+        if (userid == state.userId) {
+            $A.modalWarning('不能跟自己通话');
+            return
+        }
         window.navigator.mediaDevices.getUserMedia({
             audio: true,
             video: !!enable
@@ -3342,7 +3350,7 @@ export default {
             state.videoRemoteUserid = userid;
             state.videoLocalStream = stream;
         }).catch(_ => {
-            $A.modalWarning('当前环境不支持音视频通话！');
+            $A.modalWarning('当前环境不支持音视频通话！')
         })
     },
 
