@@ -3336,22 +3336,16 @@ export default {
      * @param state
      * @param userid
      * @param enable
+     * @param owner
      */
-    openVideo({state}, {userid, enable}) {
+    openVideo({state}, {userid, enable, owner}) {
         if (userid == state.userId) {
             $A.modalWarning('不能跟自己通话');
             return
         }
-        window.navigator.mediaDevices.getUserMedia({
-            audio: true,
-            video: !!enable
-        }).then((stream) => {
-            state.videoChatEnable = !!enable;
-            state.videoRemoteUserid = userid;
-            state.videoLocalStream = stream;
-        }).catch(_ => {
-            $A.modalWarning('当前环境不支持音视频通话！')
-        })
+        state.videoOwner = !!owner
+        state.videoEnable = !!enable
+        state.videoUserid = userid
     },
 
     /**
@@ -3359,14 +3353,6 @@ export default {
      * @param state
      */
     closeVideo({state}) {
-        return new Promise(resolve => {
-            if (state.videoLocalStream !== null) {
-                state.videoLocalStream.getTracks().forEach(track => {
-                    track.stop()
-                })
-                state.videoLocalStream = null
-            }
-            resolve()
-        })
+        state.videoUserid = 0
     }
 }
