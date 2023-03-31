@@ -119,12 +119,16 @@ body {
 
     .video-opacity {
         position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
         font-size: 26px;
         color: #aaaaaa;
-        padding: 24px;
+        padding: 0 24px;
         z-index: 3;
         animation:opacity 2s infinite alternate ;
         @keyframes opacity {
@@ -235,17 +239,25 @@ export default {
     watch: {
         visible(visible) {
             if (visible) {
-                window.navigator.mediaDevices.getUserMedia({
-                    audio: true,
-                    video: !!this.videoEnable
-                }).then(stream => {
-                    this.localStream = stream;
-                }).catch(_ => {
+                window.navigator.getUserMedia = window.navigator.getUserMedia || window.navigator.webkitGetUserMedia || window.navigator.mozGetUserMedia;
+                try {
+                    window.navigator.mediaDevices.getUserMedia({
+                        audio: true,
+                        video: !!this.videoEnable
+                    }).then(stream => {
+                        this.localStream = stream;
+                    }).catch(_ => {
+                        $A.modalWarning({
+                            content: '当前环境不支持音视频通话！',
+                            onOk: this.onBeforeClose,
+                        })
+                    })
+                } catch (e) {
                     $A.modalWarning({
                         content: '当前环境不支持音视频通话！',
                         onOk: this.onBeforeClose,
                     })
-                })
+                }
             } else {
                 if (this.localStream !== null) {
                     this.localStream.getTracks().forEach(track => {
