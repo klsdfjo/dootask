@@ -156,7 +156,7 @@
             :data-component="msgItem"
 
             :item-class-add="itemClassAdd"
-            :extra-props="{dialogData, operateVisible, operateItem, isMyDialog, msgId, unreadMsgId, readEnabled}"
+            :extra-props="{dialogData, operateVisible, operateItem, isMyDialog, msgId, unreadMsgId, scrollIng, readEnabled}"
             :estimate-size="dialogData.type=='group' ? 105 : 77"
             :keeps="keeps"
             :disabled="scrollDisabled"
@@ -722,6 +722,7 @@ export default {
             scrollDirection: null,
             scrollAction: 0,
             scrollTmp: 0,
+            scrollIng: 0,
 
             approveDetails: {id: 0},
             approveDetailsShow: false,
@@ -732,9 +733,9 @@ export default {
             unreadMsgId: 0,                     // 最早未读消息id
             positionLoad: 0,                    // 定位跳转加载中
             positionShow: false,                // 定位跳转显示
-            firstMsgLength: 0,                  // 首次加载消息数量
+            renderMsgLength: 0,                 // 渲染消息长度
             msgPreparedStatus: false,           // 消息准备完成
-            listPreparedStatus: false,          // 消息准备完成
+            listPreparedStatus: false,          // 列表准备完成
             selectedTextStatus: false,          // 是否选择文本
             scrollToBottomAndRefresh: false,    // 滚动到底部重新获取消息
         }
@@ -1093,7 +1094,7 @@ export default {
                     this.positionShow = false
                     this.listPreparedStatus = false
                     this.scrollToBottomAndRefresh = false
-                    this.firstMsgLength = Math.min(this.keeps, Math.max(this.allMsgList.length, 1))
+                    this.renderMsgLength = Math.min(this.keeps, Math.max(this.allMsgList.length, 1))
                     this.allMsgs = this.allMsgList
                     //
                     const tmpMsgA = this.allMsgList.map(({id, msg, emoji}) => {
@@ -1106,15 +1107,22 @@ export default {
                     }).then(_ => {
                         this.openId = dialog_id
                         this.listPreparedStatus = true
+                        //
+                        const {position_msgs} = this.dialogData
+                        if ($A.isArray(position_msgs)) {
+                            this.unreadMsgId = position_msgs.find(item => item.label === '{UNREAD}')?.msg_id || 0
+                        }
+                        //
                         const tmpMsgB = this.allMsgList.map(({id, msg, emoji}) => {
                             return {id, msg, emoji}
                         })
                         if (JSON.stringify(tmpMsgA) != JSON.stringify(tmpMsgB)) {
-                            this.firstMsgLength = Math.min(this.keeps, Math.max(this.allMsgList.length, 1))
+                            this.renderMsgLength = Math.min(this.keeps, Math.max(this.allMsgList.length, 1))
                         }
+                        //
                         setTimeout(_ => {
-                            this.positionShow = this.readReqLoad === 0
                             this.onSearchMsgId()
+                            this.positionShow = this.readReqLoad === 0
                         }, 100)
                     }).catch(_ => {});
                     //
@@ -1326,17 +1334,6 @@ export default {
         msgActiveIndex(index) {
             if (index > -1) {
                 setTimeout(_ => this.msgActiveIndex = -1, 800)
-            }
-        },
-
-        positionMsg() {
-            const {unread, position_msgs} = this.dialogData
-            if (!$A.isArray(position_msgs) || unread < 2) {
-                return
-            }
-            const msg = position_msgs.find(item => item.label === '{UNREAD}')
-            if (msg) {
-                this.unreadMsgId = msg.msg_id
             }
         },
 
@@ -2179,8 +2176,8 @@ export default {
             if (!this.$refs.scroller || !this.$refs.footer) {
                 return
             }
-            if (this.firstMsgLength > 0 && this.$refs.scroller.getSizes() >= this.firstMsgLength) {
-                this.firstMsgLength = 0
+            if (this.renderMsgLength > 0 && this.$refs.scroller.getSizes() >= this.renderMsgLength) {
+                this.renderMsgLength = 0
                 this.onFooterResize()
                 this.onToBottom()
             }
@@ -2476,6 +2473,9 @@ export default {
             this.scrollAction = event.target.scrollTop;
             this.scrollDirection = this.scrollTmp <= this.scrollAction ? 'down' : 'up';
             setTimeout(_ => this.scrollTmp = this.scrollAction, 0);
+            //
+            this.scrollIng++;
+            setTimeout(_=> this.scrollIng--, 100);
         },
 
         onRange(range) {
